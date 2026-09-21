@@ -1,0 +1,153 @@
+.content {
+  padding-top: 0 !important;
+  max-height: 70vh;
+}
+
+.pane {
+  padding: 16px 4px 4px;
+}
+
+.tab-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-inline-start: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.tab-badge--error {
+  background: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+}
+
+.tab-badge--warn {
+  background: #b26a00;
+  color: #fff;
+}
+
+.tab-ok {
+  margin-inline-start: 6px;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #1b8a4b;
+}
+
+.ok {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #1b8a4b 10%, transparent);
+
+  mat-icon {
+    flex: none;
+    color: #0f6b38;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+    line-height: 1.5;
+  }
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 8px;
+  font: var(--mat-sys-title-small);
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.group--error {
+  color: var(--mat-sys-error);
+}
+
+.group--warn {
+  color: #8a5200;
+}
+
+.issues {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: var(--mat-sys-surface-container-high);
+    font: var(--mat-sys-body-small);
+    line-height: 1.5;
+  }
+
+  code {
+    flex: none;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface-variant);
+    font-family: 'Roboto Mono', ui-monospace, monospace;
+    font-size: 11px;
+  }
+}
+
+.json-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.json {
+  max-height: 46vh;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container-high);
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.signer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: auto;
+  padding-inline-start: 8px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.signer--off {
+  color: var(--mat-sys-on-surface-variant);
+  opacity: 0.9;
+}
+
+.grow {
+  flex: 1 1 auto;
+}

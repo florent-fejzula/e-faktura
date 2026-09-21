@@ -1,0 +1,165 @@
+rules_version = '2';
+
+// Security model
+// --------------
+// Everything is scoped to a company, and access to a company is decided by its
+// `memberUids` array. Invoices and clients live underneath their company, so a
+// single membership check covers them and there is no query that can reach
+// another company's records.
+//
+// Issued invoices are additionally locked down: once UJP has a copy, the tax
+// record must not change. The rules below let payment tracking and the UJP
+// receipt be updated, and nothing else.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function companyData(companyId) {
+      return get(/databases/$(database)/documents/companies/$(companyId)).data;
+    }
+
+    function isMember(companyId) {
+      return signedIn() && request.auth.uid in companyData(companyId).memberUids;
+    }
+
+    // The operator. A document under /admins keyed by uid, writable only from
+    // the Firebase console — so admin cannot be granted from inside the app.
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Subscription: one date, compared as a calendar day. Access runs to the
+    // end of `paidUntil`, so a company paid until the 29th works all of the
+    // 29th. Anything missing or malformed fails closed.
+    function paidThrough(sub) {
+      return timestamp.date(
+        int(sub.paidUntil.split('-')[0]),
+        int(sub.paidUntil.split('-')[1]),
+        int(sub.paidUntil.split('-')[2])
+      ) + duration.value(1, 'd');
+    }
+
+    // Companies created before subscriptions existed carry no such field, and
+    // the app backfills a trial the first time their owner opens them. That is
+    // the one write a client may make here: `get(..., null)` treats missing and
+    // present alike, so once the field exists it can be neither changed nor
+    // removed, and the opening trial cannot be claimed twice.
+    function subscriptionUnchangedOrFirstSet() {
+      let before = resource.data.get('subscription', null);
+      let after = request.resource.data.get('subscription', null);
+      return after == before || (before == null && after.plan == 'trial');
+    }
+
+    function subscribed(companyId) {
+      let sub = companyData(companyId).get('subscription', null);
+      // Absent means "not backfilled yet", not "lapsed" — and it cannot be
+      // removed to get back here, so this is not a way round the paywall.
+      return sub == null || (
+        'paidUntil' in sub
+        && sub.paidUntil is string
+        && sub.paidUntil.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && paidThrough(sub) > request.time
+      );
+    }
+
+    // An invoice is a draft until it is issued. `issuedAt` is what freezes it —
+    // not `status`, which stays "00" until УЈП actually has a copy, so a
+    // status-only check would leave issued-but-unsubmitted invoices editable.
+    function isDraft() {
+      return resource.data.status == '00'
+        && (!('issuedAt' in resource.data) || resource.data.issuedAt == null);
+    }
+
+    // Fields that may still change after an invoice has been issued.
+    function onlyMutableAfterIssue() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'paymentStatus', 'paidAmount', 'paidAt',
+        'ujp', 'ujpErrors', 'status',
+        'updatedAt', 'updatedByUid'
+      ]);
+    }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /admins/{uid} {
+      // Readable so the app can show its own admin screen; never writable.
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /companies/{companyId} {
+      allow get, list: if isAdmin()
+        || (signedIn() && request.auth.uid in resource.data.memberUids);
+
+      // The creator must be the owner and the sole initial member, so a user
+      // cannot mint a company that grants themselves access to someone else's.
+      // The opening trial is written here and is the only subscription value a
+      // client is ever allowed to set.
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids.hasOnly([request.auth.uid])
+        && request.resource.data.memberUids.hasAll([request.auth.uid])
+        && request.resource.data.subscription.plan == 'trial';
+
+      // Ownership cannot be reassigned by an update, only the owner may change
+      // the member list, and a normal user may not move the subscription —
+      // otherwise anyone could grant themselves another decade from the browser
+      // console. It changes only through the admin screen.
+      allow update: if isAdmin() || (
+        isMember(companyId)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && subscriptionUnchangedOrFirstSet()
+        && (
+          request.resource.data.memberUids == resource.data.memberUids
+          || request.auth.uid == resource.data.ownerUid
+        )
+      );
+
+      allow delete: if signedIn() && request.auth.uid == resource.data.ownerUid;
+
+      match /invoices/{invoiceId} {
+        allow read: if isMember(companyId);
+
+        // The paywall. Creating a new invoice is the one thing that stops when
+        // a subscription lapses — reading, printing, exporting and finishing an
+        // existing draft all keep working, because this is the customer's own
+        // accounting record and holding it hostage would be indefensible.
+        allow create: if isMember(companyId)
+          && subscribed(companyId)
+          && request.resource.data.companyId == companyId;
+
+        // A draft is freely editable. An issued invoice is frozen apart from
+        // payment tracking and the УЈП receipt — including the write that
+        // issues it, which sets `issuedAt` while the document is still a draft.
+        allow update: if isMember(companyId)
+          && (isDraft() || onlyMutableAfterIssue());
+
+        // Deletable only while УЈП has no copy: a draft, or an invoice numbered
+        // locally but never submitted. Once `status` moves off "00" the
+        // document is a tax record and must be storno'd, not erased.
+        allow delete: if isMember(companyId) && resource.data.status == '00';
+      }
+
+      match /clients/{clientId} {
+        allow read, write: if isMember(companyId);
+      }
+
+      // Cached UJP code lists and other per-company settings.
+      match /settings/{settingId} {
+        allow read, write: if isMember(companyId);
+      }
+    }
+
+    // Anything not matched above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

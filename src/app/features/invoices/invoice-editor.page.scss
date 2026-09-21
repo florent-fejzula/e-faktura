@@ -1,0 +1,477 @@
+.editor {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 16px 16px 48px;
+}
+
+.grow {
+  flex: 1 1 auto;
+}
+
+.w-full {
+  width: 100%;
+}
+
+/* --- top bar -------------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.bar__back {
+  flex: none;
+}
+
+.bar__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bar__title h1 {
+  margin: 0;
+  font: var(--mat-sys-title-large);
+  white-space: nowrap;
+}
+
+.bar__chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.unsaved {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-small);
+}
+
+@media (max-width: 599px) {
+  /*
+   * The actions drop to their own full-width row rather than shrinking to bare
+   * icons. A floppy disk and a tick sitting alone in the header said nothing
+   * about "save draft" and "issue" — and an icon alone inside a text button is
+   * not even centred, because the padding is sized for a label beside it.
+   */
+  .bar {
+    flex-wrap: wrap;
+  }
+  .bar__actions {
+    flex: 1 0 100%;
+    margin-top: 6px;
+  }
+  .bar__actions button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .bar__title h1 {
+    font: var(--mat-sys-title-medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .editor {
+    padding: 12px 10px 40px;
+  }
+}
+
+/* --- banners -------------------------------------------------------------- */
+
+.issues,
+.receipt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, #b26a00 12%, transparent);
+  color: var(--mat-sys-on-surface);
+
+  > mat-icon {
+    flex: none;
+    color: #8a5200;
+  }
+
+  ul {
+    margin: 4px 0 0;
+    padding-inline-start: 18px;
+    font: var(--mat-sys-body-small);
+    line-height: 1.6;
+  }
+}
+
+.issues--error {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  > mat-icon {
+    color: var(--mat-sys-error);
+  }
+}
+
+.receipt {
+  align-items: center;
+  background: color-mix(in srgb, #1b8a4b 12%, transparent);
+
+  > mat-icon {
+    color: #0f6b38;
+  }
+}
+
+.receipt__euid {
+  margin-top: 2px;
+  font: var(--mat-sys-body-small);
+
+  code {
+    font-family: 'Roboto Mono', ui-monospace, monospace;
+    font-size: 11px;
+  }
+}
+
+.link {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-large);
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* --- layout --------------------------------------------------------------- */
+
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1099px) {
+  .cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.col-main,
+.col-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .col-side {
+    position: sticky;
+    top: 12px;
+  }
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 16px;
+  background: var(--mat-sys-surface);
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-small);
+    color: var(--mat-sys-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+}
+
+/* --- client --------------------------------------------------------------- */
+
+.client-pick {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.client-pick__field {
+  flex: 1 1 260px;
+}
+
+.party {
+  position: relative;
+  padding-inline-end: 40px;
+}
+
+.party__name {
+  font: var(--mat-sys-title-medium);
+}
+
+.party__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 3px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.party__clear {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+}
+
+.opt-name {
+  font-weight: 500;
+}
+
+.opt-tin {
+  margin-inline-start: 8px;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.opt-code {
+  display: inline-block;
+  min-width: 88px;
+  margin-inline-end: 10px;
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--mat-sys-primary);
+}
+
+.opt-desc {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+}
+
+/* --- items ---------------------------------------------------------------- */
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item {
+  padding: 12px 12px 10px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 14px;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.item__row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+/* The number row sits under the description field, which has no subscript to
+   separate them — hence a real margin rather than the flex gap. */
+.item__row--nums {
+  flex-wrap: wrap;
+  gap: 12px 10px;
+  margin-top: 12px;
+}
+
+.f-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.f-qty {
+  flex: 0 1 100px;
+}
+.f-unit {
+  flex: 0 1 118px;
+}
+.f-price {
+  flex: 1 1 170px;
+}
+.f-disc {
+  flex: 0 1 104px;
+}
+.f-tax {
+  flex: 1 1 170px;
+}
+
+.item__menu {
+  margin-top: 4px;
+  flex: none;
+}
+
+.item__calc {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--mat-sys-outline-variant);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.item__calc-part strong {
+  color: var(--mat-sys-on-surface);
+  font-weight: 500;
+}
+
+.item__calc-part--note {
+  font-style: italic;
+}
+
+.item__calc-total {
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-on-surface);
+}
+
+.add-item {
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* --- side ----------------------------------------------------------------- */
+
+/* Outlined fields need room between them: the floating label sits *on* the
+   next field's border, so a tight gap reads as one stacked block. */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auto-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.suffix {
+  padding-inline-start: 6px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.card--totals {
+  background: var(--mat-sys-surface);
+}
+
+.totals {
+  margin: 0;
+
+  div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+  }
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-medium);
+  }
+
+  dd {
+    margin: 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.totals--muted dt,
+.totals--muted dd {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.totals__sep {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  margin-top: 4px;
+  padding-top: 8px !important;
+}
+
+.totals__grand {
+  margin-top: 6px;
+  padding-top: 10px !important;
+  border-top: 2px solid var(--mat-sys-outline-variant);
+
+  dt {
+    font: var(--mat-sys-title-small);
+    color: var(--mat-sys-on-surface);
+  }
+
+  dd {
+    font: var(--mat-sys-headline-small);
+  }
+}
+
+.in-words {
+  margin: 10px 0 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.tax-note {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  line-height: 1.45;
+}
+
+.card--totals .w-full {
+  margin-top: 12px;
+}
+
+/* --- not found ------------------------------------------------------------ */
+
+.missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 80px 20px;
+  text-align: center;
+
+  mat-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+}

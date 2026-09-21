@@ -1,0 +1,98 @@
+<h2 mat-dialog-title>УЈП документ</h2>
+
+<mat-dialog-content class="content">
+  <mat-tab-group>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        Проверка
+        @if (validation().errors.length) {
+          <span class="tab-badge tab-badge--error">{{ validation().errors.length }}</span>
+        } @else if (validation().warnings.length) {
+          <span class="tab-badge tab-badge--warn">{{ validation().warnings.length }}</span>
+        } @else {
+          <mat-icon class="tab-ok">check_circle</mat-icon>
+        }
+      </ng-template>
+
+      <div class="pane">
+        @if (validation().issues.length === 0) {
+          <div class="ok">
+            <mat-icon>verified</mat-icon>
+            <div>
+              <strong>Документот ги поминува сите локални проверки.</strong>
+              <p>
+                Задолжителните полиња, шифрите и износите се усогласени со правилата на УЈП.
+                Конечната валидација се прави на серверот на УЈП при испраќање.
+              </p>
+            </div>
+          </div>
+        }
+
+        @if (validation().errors.length) {
+          <h3 class="group group--error">
+            <mat-icon>error</mat-icon>
+            Грешки — мора да се исправат
+          </h3>
+          <ul class="issues">
+            @for (issue of validation().errors; track issue.path + issue.message) {
+              <li>
+                <code>{{ issue.path }}</code>
+                <span>{{ issue.message }}</span>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (validation().warnings.length) {
+          <h3 class="group group--warn">
+            <mat-icon>warning</mat-icon>
+            Предупредувања
+          </h3>
+          <ul class="issues">
+            @for (issue of validation().warnings; track issue.path + issue.message) {
+              <li>
+                <code>{{ issue.path }}</code>
+                <span>{{ issue.message }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </mat-tab>
+
+    <mat-tab label="JSON">
+      <div class="pane">
+        <div class="json-actions">
+          <button mat-stroked-button type="button" (click)="copy()">
+            <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
+            {{ copied() ? 'Копирано' : 'Копирај' }}
+          </button>
+          <button mat-stroked-button type="button" (click)="download()">
+            <mat-icon>download</mat-icon>
+            Симни .json
+          </button>
+        </div>
+        <pre class="json"><code>{{ json() }}</code></pre>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <div class="signer" [class.signer--off]="!signerStatus.available">
+    <mat-icon>{{ signerStatus.available ? 'verified_user' : 'gpp_maybe' }}</mat-icon>
+    <span>{{ signerStatus.available ? signerStatus.name : 'Потпишувањето не е конфигурирано' }}</span>
+  </div>
+  <span class="grow"></span>
+  <button mat-button type="button" (click)="ref.close()">Затвори</button>
+  <button
+    mat-flat-button
+    type="button"
+    [disabled]="!signerStatus.available || !validation().canSubmit"
+    [matTooltip]="signerStatus.available ? '' : signerStatus.reason ?? ''"
+    matTooltipPosition="above"
+  >
+    <mat-icon>send</mat-icon>
+    Испрати до УЈП
+  </button>
+</mat-dialog-actions>

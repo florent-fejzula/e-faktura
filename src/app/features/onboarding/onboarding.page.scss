@@ -1,0 +1,222 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.wizard {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px calc(32px + env(safe-area-inset-bottom));
+}
+
+.wizard__header h1 {
+  margin: 0;
+  font: var(--mat-sys-headline-medium);
+}
+
+.wizard__header p {
+  margin: 6px 0 20px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.steps {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.steps__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-medium);
+}
+
+.steps__item--active {
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.steps__item--done .steps__dot {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.steps__dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--mat-sys-surface-container-high);
+  font-size: 12px;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.steps__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .steps__label {
+    display: none;
+  }
+  .steps__item {
+    justify-content: center;
+  }
+}
+
+.card {
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--mat-sys-surface);
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  /* Fields keep their natural height: a neighbour whose hint wraps to two
+     lines would otherwise stretch this one's outline into a tall empty box. */
+  align-items: start;
+}
+
+@media (max-width: 599px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.span-2 {
+  grid-column: 1 / -1;
+}
+
+.vat-toggle {
+  padding: 4px 0 12px;
+}
+
+.hint,
+.section-note {
+  margin: 4px 0 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.section-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container-high);
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.preview {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.preview__label {
+  font: var(--mat-sys-body-small);
+}
+
+.preview__value {
+  font: var(--mat-sys-headline-small);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  padding: 7px 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 999px;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-medium);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+}
+
+.chip--active {
+  border-color: transparent;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.wizard__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.grow {
+  flex: 1 1 auto;
+}
+
+/* Escape hatch, present only when this run is optional. */
+.wizard__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin-bottom: 10px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-large);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}

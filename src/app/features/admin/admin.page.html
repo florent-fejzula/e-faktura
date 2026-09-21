@@ -1,0 +1,212 @@
+<div class="page">
+  <header class="page__head">
+    <div>
+      <h1>Претплати</h1>
+      <p class="page__sub">
+        {{ summary().total }} {{ summary().total === 1 ? 'фирма' : 'фирми' }} ·
+        {{ summary().paying }} платени
+      </p>
+    </div>
+    <button mat-flat-button type="button" (click)="addCustomer()">
+      <mat-icon>person_add</mat-icon>
+      Нов корисник
+    </button>
+  </header>
+
+  <section class="stats" aria-label="Преглед">
+    <div class="stat">
+      <span class="stat__label">Платени</span>
+      <strong class="stat__value">{{ summary().paying }}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat__label">Пробни</span>
+      <strong class="stat__value">{{ summary().trial }}</strong>
+    </div>
+    <div class="stat stat--warn">
+      <span class="stat__label">Истекуваат до 7 дена</span>
+      <strong class="stat__value">{{ summary().expiring }}</strong>
+    </div>
+    <div class="stat stat--bad">
+      <span class="stat__label">Истечени</span>
+      <strong class="stat__value">{{ summary().expired }}</strong>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <mat-form-field class="toolbar__search" subscriptSizing="fixed">
+      <mat-icon matPrefix>search</mat-icon>
+      <mat-label>Барај по назив или ЕДБ</mat-label>
+      <input matInput [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    </mat-form-field>
+
+    <button mat-stroked-button type="button" [matMenuTriggerFor]="sortMenu">
+      <mat-icon>sort</mat-icon>
+      Подреди
+    </button>
+  </div>
+
+  @if (loading()) {
+    <p class="muted">Се вчитува…</p>
+  } @else if (!rows().length) {
+    <div class="empty">
+      <mat-icon>domain_disabled</mat-icon>
+      <h2>Нема фирми</h2>
+      <button mat-flat-button type="button" (click)="addCustomer()">
+        <mat-icon>person_add</mat-icon>
+        Нов корисник
+      </button>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Фирма</th>
+            <th>ЕДБ</th>
+            <th class="num">Фактури</th>
+            <th>Плати до</th>
+            <th>Статус</th>
+            <th>Забелешка</th>
+            <th class="actions-col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (company of rows(); track company.id) {
+            <tr [class.row--busy]="busyId() === company.id">
+              <td>
+                <strong>{{ company.name }}</strong>
+                @if (company.email) {
+                  <span class="sub">{{ company.email }}</span>
+                }
+              </td>
+              <td class="tabular muted">{{ company.taxNumber }}</td>
+              <td class="num tabular">{{ company.stats?.issuedCount ?? 0 }}</td>
+              <td>
+                @if (company.subscription?.paidUntil; as until) {
+                  <span class="tabular">{{ until | mkDate }}</span>
+                  <span class="sub">{{ relativeExpiry(company) }}</span>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+              <td>
+                <span class="pill" [attr.data-state]="state(company)">
+                  {{ labels[state(company)] }}
+                </span>
+              </td>
+              <td class="note-col">
+                <input
+                  class="note"
+                  [value]="company.subscription?.note ?? ''"
+                  placeholder="—"
+                  (blur)="setNote(company, $any($event.target).value)"
+                />
+              </td>
+              <td class="actions-col">
+                <button
+                  mat-flat-button
+                  type="button"
+                  class="renew"
+                  [disabled]="busyId() === company.id"
+                  (click)="extend(company, 365)"
+                  matTooltip="Продолжи една година"
+                >
+                  +1 година
+                </button>
+                <button
+                  mat-icon-button
+                  type="button"
+                  [matMenuTriggerFor]="rowMenu"
+                  [matMenuTriggerData]="{ company: company }"
+                  aria-label="Повеќе"
+                >
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- handset cards -->
+    <ul class="cards">
+      @for (company of rows(); track company.id) {
+        <li class="card">
+          <div class="card__top">
+            <strong>{{ company.name }}</strong>
+            <span class="pill" [attr.data-state]="state(company)">
+              {{ labels[state(company)] }}
+            </span>
+          </div>
+          <div class="card__meta">
+            <span class="tabular">{{ company.taxNumber }}</span>
+            <span>{{ company.stats?.issuedCount ?? 0 }} фактури</span>
+          </div>
+          <div class="card__meta">
+            @if (company.subscription?.paidUntil; as until) {
+              <span>Плати до {{ until | mkDate }} · {{ relativeExpiry(company) }}</span>
+            } @else {
+              <span class="muted">Нема претплата</span>
+            }
+          </div>
+          <div class="card__actions">
+            <button
+              mat-flat-button
+              type="button"
+              [disabled]="busyId() === company.id"
+              (click)="extend(company, 365)"
+            >
+              +1 година
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              [matMenuTriggerFor]="rowMenu"
+              [matMenuTriggerData]="{ company: company }"
+              aria-label="Повеќе"
+            >
+              <mat-icon>more_vert</mat-icon>
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</div>
+
+<mat-menu #sortMenu="matMenu">
+  <button mat-menu-item type="button" (click)="setSort('expiry')">
+    <mat-icon>schedule</mat-icon>
+    <span>Прво што истекува</span>
+  </button>
+  <button mat-menu-item type="button" (click)="setSort('invoices')">
+    <mat-icon>trending_up</mat-icon>
+    <span>Најмногу фактури</span>
+  </button>
+  <button mat-menu-item type="button" (click)="setSort('joined')">
+    <mat-icon>person_add</mat-icon>
+    <span>Најнови</span>
+  </button>
+  <button mat-menu-item type="button" (click)="setSort('name')">
+    <mat-icon>sort_by_alpha</mat-icon>
+    <span>По назив</span>
+  </button>
+</mat-menu>
+
+<mat-menu #rowMenu="matMenu">
+  <ng-template matMenuContent let-company="company">
+    <button mat-menu-item type="button" (click)="extend(company, 365)">
+      <mat-icon>event_available</mat-icon>
+      <span>+1 година</span>
+    </button>
+    <button mat-menu-item type="button" (click)="extend(company, 30)">
+      <mat-icon>more_time</mat-icon>
+      <span>+30 дена</span>
+    </button>
+    <button mat-menu-item type="button" class="danger" (click)="stop(company)">
+      <mat-icon>block</mat-icon>
+      <span>Прекини претплата</span>
+    </button>
+  </ng-template>
+</mat-menu>

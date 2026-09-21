@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Company logos and any future attachments. Access mirrors Firestore: a file
+// under a company path is readable and writable only by that company's members.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /companies/{companyId}/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && request.auth.uid in firestore.get(/databases/(default)/documents/companies/$(companyId)).data.memberUids;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

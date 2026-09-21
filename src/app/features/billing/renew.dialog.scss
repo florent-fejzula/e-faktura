@@ -1,0 +1,129 @@
+:host {
+  display: block;
+  max-width: min(480px, 90vw);
+}
+
+.lede {
+  margin: 0 0 16px;
+  line-height: 1.6;
+}
+
+/* The number people came to find. */
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--mat-sys-surface-container-high);
+}
+
+.price__amount {
+  font: var(--mat-sys-headline-medium);
+  font-weight: 600;
+}
+
+.price__unit {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.price__note {
+  display: block;
+  font: var(--mat-sys-body-small);
+}
+
+.steps {
+  margin: 16px 0;
+  padding-inline-start: 20px;
+
+  li {
+    margin-bottom: 6px;
+    line-height: 1.55;
+  }
+}
+
+.bank {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 14px;
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+  }
+
+  dd {
+    margin: 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copy {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-primary);
+  }
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.contact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  a {
+    color: var(--mat-sys-primary);
+  }
+}
+
+@media (max-width: 599px) {
+  .bank {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px 0;
+
+    dd {
+      margin-bottom: 8px;
+    }
+  }
+}

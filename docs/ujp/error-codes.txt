@@ -1,0 +1,196 @@
+Error Codes | wiki Ефактура¶ Error Codes - eInvoiceApi
+¶ Business / Domain Errors (E1XXX)
+E1000 – Company not found
+E1001 – Country not found
+E1002 – Reject reason not found
+E1004 – Tax group not found
+E1006 – Void reason not found
+E1009 – Tax indicator not found
+E1010 – User not found
+E1011 – Privilege not found
+E1012 – Certificate not found
+E1013 – User is not authorized to sign documents for this company
+E1014 – Tax payer not found
+E1015 – Status History not found.
+E1016 – Document is not in status NEW. Cannot be accepted, rejected, or cancelled.
+E1017 – Document type not found
+E1018 – Document Status not found
+E1019 – Status History List not found.
+E1020 – This certificate for this company already exists!
+E1021 – Document LTV data for this euid '%s' not found
+E1022 – Document status cannot be changed
+E1023 – Report date range exceeds allowed maximum limit
+E1024 – Purchase VAT taxable amount cannot be greater than document taxable amount
+¶ Client / Request Errors (E4XXX)
+E4000 – Bad request
+E4001 – Error binding request parameters
+E4002 – Missing required request parameter
+E4003 – Missing required path variable
+E4004 – No handler found for HTTP method and URL
+E4005 – HTTP method not supported for this endpoint
+E4007 – Rate limit exceeded
+E4008 – Requested resource not found
+E4009 – Asynchronous request timeout occurred
+E4010 – Invalid value type provided in request
+E4011 – Required request body is missing
+E4012 – Request timestamp validation failed
+E4013 – JSON schema validation failed
+E4014 – Allowed date range exceeded (maximum 1 month)
+E4015 – Invalid signature
+E4016 – Missing required request headers
+E4023 – Notification with ID was not found
+E4025 – Unable to validate certificate using CRL
+¶ Server / Processing Errors (E5XXX)
+E5000 – Internal server error
+E5001 – Internal error occurred while processing the request
+E5002 – Certificate expired
+E5003 – Certificate revoked or unverified (OCSP failure)
+E5004 – Certificate validation failed
+E5005 – JWS validation failed
+E5006 – Tax payer validation failed
+E5007 – Document validation failed
+E5008 – Failed to fetch TimeStampToken
+E5011 – Invalid value for field
+E5014 – The allowed period for modifying Purchase VAT totals has expired
+E5015 – Duplicate purchase VAT total records found. The combination must be unique.
+E5016 – Operation is not allowed for documents with status
+E5017 – Failed to generate ASiC container. Invalid LTV data.
+¶ Error Codes - JSON Receiver
+¶ Business / Domain Errors (E1XXX)
+E1000 – Company not found
+E10001 – Missing TIN during company validation process
+E10002 – An incorrect company name was provided
+E10003 – An incorrect VAT number was provided for the company
+E10004 – An incorrect city was provided for the company
+E10005 – An incorrect postal code was provided for the company
+E10006 – An incorrect company name was provided
+E10007 – An incorrect VAT number was provided for the company
+E10008 – VatNumber missing!
+E1001 – Country not found
+E10011 – A non-existent country was provided for the company
+E10012 – An incorrect country code was provided for the company
+E1002 – Reject reason not found
+E1004 – Tax group not found
+E1006 – Void reason not found
+E1009 – Tax indicator not found
+E1010 – User not found
+E1011 – Privilege not found
+E1012 – Certificate not found
+E1013 – User is not authorized to sign documents for this company
+E1014 – Tax payer not found
+E1015 – Status History not found.
+E1016 – Document is not saved as NEW. Cannot be cancelled.
+E1017 – Document type not found
+E1018 – Document Status not found
+E1019 – Status History List not found.
+E1020 – Invalid calculated totals
+E10201 – Invalid calculated docTotals
+E10202 – Invalid calculated vatTotals
+E10203 – Invalid calculations for doc item
+E1021 – Document reference not found
+E10211 – Document reference name mismatch
+E1022 – Document already has been refrenced
+E1023 – Invoice already exists for that ID
+E1024 – Voided document must refrence a document
+E1025 – Invalid void request
+E1026 – Referenced document is voided
+E1027 – Corrected document must refrence a document
+E1028 – Referenced document is corrected
+E1029 – docTypeRef cannot be 'ST' for this document type
+E1030 – Correction documents must reference an existing document
+E1031 – Invalid correction request
+E1032 – Invalid Vat Tax Indicator Note
+¶ Client / Request Errors (E4XXX)
+E4000 – Bad request
+E4001 – Error binding request parameters
+E4002 – Missing required request parameter
+E4003 – Missing required path variable
+E4004 – No handler found for HTTP method and URL
+E4005 – HTTP method not supported for this endpoint
+E4007 – Rate limit exceeded
+E4008 – The requested resource could not be found
+E4009 – The request took too long to process.Asynchronous request timeout occurred.
+E4010 – Invalid value type provided in request
+E4011 – Required request body is missing
+E4012 – Request timestamp validation failed
+E40121 – Problem parsing requestTimestamp
+E40122 – The requestTimestamp difference is greater than 5 minutes
+E4013 – JSON schema validation failed
+E40131 – Badly formatted JSON in JWS
+E4014 – The allowed date range is 1 month.
+E4015 – Invalid signature
+E4016 – Missing required request headers
+E4018 – JSON serialization error
+E4019 – Missing required fields
+E4020 – Request header mismatch
+E4021 – Invalid X-SERIAL-NUMBER
+E4022 – Invalid X-EUJP-ID
+E4023 – Invalid X-EDB
+E4024 – Invalid request body
+¶ Server / Processing Errors (E5XXX)
+E5000 – Internal server error
+E5001 – Internal error occurred while processing the request
+E5002 – Certificate has expired.
+E5003 – Certificate has been revoked or unverified according to OCSP response
+E5004 – Certificate validation failed
+E5005 – JWS validation failed
+E50051 – Invalid JWS signature (without validation)
+E5006 – Tax payer validation failed
+E5007 – Document validation failed
+E50071 – docDeliveryDate is not before docDate
+E50072 – docTurnoverDate is not before docDate
+E50073 – docDateRef is not before docDate
+E50074 – Payment type not found
+E50075 – Payment type description mismatch
+E50076 – Currency not found
+E50077 – Currency name mismatch
+E50078 – docPayment don't match
+E50079 – Document type mismatch
+E500710 – Document date mismatch
+E500711 – docDeliveryDate mismatch
+E500712 – docDelivery mismatch
+E500713 – docTurnoverDate mismatch
+E500714 – docPeriodStartDate mismatch
+E500715 – docPeriodEndDate mismatch
+E500716 – docNotes mismatch
+E500717 – docHeader mismatch
+E500718 – docFooter mismatch
+E5008 – Fetching TimeStampToken failed
+E5011 – No OCSP responses for certificate
+E5012 – Certificate serial mismatch
+¶ Error Codes - Web App
+¶ Domain Errors (E1XXX)
+E1000 – Company not found
+E1010 – User not found
+E1013 – User is not authorized to sign documents for this company
+E1014 – Tax payer not found
+E1017 – Document type not found
+E1018 – Unsigned document not found
+E1019 – Selected date range exceeds allowed maximum limit of days
+¶ Request Errors (E4XXX)
+E4000 – Bad request
+E4001 – Error binding request parameters
+E4002 – Missing required request parameter
+E4003 – Missing required path variable
+E4004 – No handler found for HTTP method and URL
+E4005 – HTTP method not supported for this endpoint
+E4007 – Rate limit exceeded
+E4008 – Requested resource not found
+E4009 – Asynchronous request timeout occurred
+E4010 – Invalid value type provided in request
+E4011 – Request body is missing or contains an invalid JSON payload
+E4012 – Request timestamp validation failed
+E4013 – JSON schema validation failed
+E4014 – Allowed date range exceeded (maximum 1 month)
+E4015 – Invalid signature
+E4016 – Missing required request headers
+¶ Processing Errors (E5XXX)
+E5000 – Internal server error
+E5001 – Internal error occurred while processing the request
+E5002 – Certificate has expired.
+E5003 – Certificate revoked or unverified (OCSP failure)
+E5004 – Certificate validation failed
+E5005 – JWS validation failed
+E5006 – Tax payer validation failed
+E5007 – Document validation failed
+E5008 – Failed to fetch TimeStampToken

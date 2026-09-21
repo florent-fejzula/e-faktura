@@ -1,0 +1,153 @@
+<div class="auth">
+  <section class="auth__panel">
+    <div class="brand">
+      <span class="brand__mark">е</span>
+      <div>
+        <h1 class="brand__title">е-Фактура</h1>
+        <p class="brand__subtitle">Издавање фактури за Северна Македонија</p>
+      </div>
+    </div>
+
+    <h2 class="auth__heading">{{ title() }}</h2>
+
+    @if (auth.busy()) {
+      <mat-progress-bar mode="indeterminate" class="auth__progress" />
+    }
+
+    <button
+      type="button"
+      mat-stroked-button
+      class="google"
+      [disabled]="auth.busy()"
+      (click)="signInWithGoogle()"
+    >
+      <svg class="google__icon" viewBox="0 0 18 18" aria-hidden="true">
+        <path
+          fill="#4285F4"
+          d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
+        />
+        <path
+          fill="#34A853"
+          d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z"
+        />
+        <path
+          fill="#FBBC05"
+          d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z"
+        />
+        <path
+          fill="#EA4335"
+          d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z"
+        />
+      </svg>
+      Продолжи со Google
+    </button>
+
+    <div class="divider"><span>или</span></div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" class="auth__form">
+      @if (mode() === 'register') {
+        <mat-form-field>
+          <mat-label>Име и презиме</mat-label>
+          <input matInput formControlName="displayName" autocomplete="name" />
+        </mat-form-field>
+      }
+
+      <mat-form-field>
+        <mat-label>Е-пошта</mat-label>
+        <input matInput type="email" formControlName="email" autocomplete="email" />
+        @if (form.controls.email.touched && form.controls.email.hasError('required')) {
+          <mat-error>Внесете е-пошта.</mat-error>
+        } @else if (form.controls.email.touched && form.controls.email.hasError('email')) {
+          <mat-error>Внесете важечка е-пошта.</mat-error>
+        }
+      </mat-form-field>
+
+      @if (mode() !== 'reset') {
+        <mat-form-field>
+          <mat-label>Лозинка</mat-label>
+          <input
+            matInput
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="password"
+            [autocomplete]="mode() === 'register' ? 'new-password' : 'current-password'"
+          />
+          <button
+            matSuffix
+            mat-icon-button
+            type="button"
+            (click)="toggleShowPassword()"
+            [attr.aria-label]="showPassword() ? 'Сокриј лозинка' : 'Прикажи лозинка'"
+          >
+            <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          @if (form.controls.password.touched && form.controls.password.hasError('minlength')) {
+            <mat-error>Најмалку 6 знаци.</mat-error>
+          }
+        </mat-form-field>
+      }
+
+      @if (auth.error(); as message) {
+        <p class="auth__error" role="alert">
+          <mat-icon>error_outline</mat-icon>
+          <span>{{ message }}</span>
+        </p>
+      }
+
+      <button mat-flat-button type="submit" class="auth__submit" [disabled]="auth.busy()">
+        @switch (mode()) {
+          @case ('register') {
+            Создај сметка
+          }
+          @case ('reset') {
+            Испрати линк
+          }
+          @default {
+            Најави се
+          }
+        }
+      </button>
+    </form>
+
+    <div class="auth__links">
+      @switch (mode()) {
+        @case ('signin') {
+          <button type="button" (click)="setMode('reset')">Заборавена лозинка?</button>
+          <button type="button" (click)="setMode('register')">Создадете нова сметка</button>
+        }
+        @case ('register') {
+          <button type="button" (click)="setMode('signin')">Веќе имате сметка? Најавете се</button>
+        }
+        @case ('reset') {
+          <button type="button" (click)="setMode('signin')">Назад на најава</button>
+        }
+      }
+    </div>
+  </section>
+
+  <aside class="auth__aside" aria-hidden="true">
+    <h2>Подгответе се за е-фактурирање</h2>
+    <ul>
+      <li>
+        <mat-icon>bolt</mat-icon>
+        <div>
+          <strong>Фактура за помалку од минута</strong>
+          <span>Автоматска нумерација, зачувани клиенти и ставки.</span>
+        </div>
+      </li>
+      <li>
+        <mat-icon>verified</mat-icon>
+        <div>
+          <strong>Пресметки според УЈП</strong>
+          <span>Даночни индикатори, член 32 и ослободувања — точно по формулите.</span>
+        </div>
+      </li>
+      <li>
+        <mat-icon>search</mat-icon>
+        <div>
+          <strong>Најдете сè за секунда</strong>
+          <span>Филтри по датум, износ, клиент и статус.</span>
+        </div>
+      </li>
+    </ul>
+  </aside>
+</div>

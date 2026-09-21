@@ -1,0 +1,651 @@
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (!invoice()) {
+  <div class="missing">
+    <mat-icon>search_off</mat-icon>
+    <h2>Фактурата не е најдена</h2>
+    <a mat-flat-button routerLink="/fakturi">Назад кон листата</a>
+  </div>
+} @else if (invoice(); as inv) {
+  <div class="editor no-print">
+    <!-- ---------------------------------------------------------------- -->
+    <header class="bar no-print">
+      <a mat-icon-button routerLink="/fakturi" aria-label="Назад" class="bar__back">
+        <mat-icon>arrow_back</mat-icon>
+      </a>
+
+      <div class="bar__title">
+        <h1>
+          @if (inv.number) {
+            Фактура {{ inv.number }}
+          } @else {
+            Нова фактура
+          }
+        </h1>
+        <div class="bar__chips">
+          <app-status-chip [status]="inv.status" [issued]="inv.issuedAt !== null" />
+          @if (inv.issuedAt !== null) {
+            <app-status-chip [payment]="inv.paymentStatus" />
+          }
+          @if (dirty()) {
+            <span class="unsaved">Незачувани промени</span>
+          }
+        </div>
+      </div>
+
+      <span class="grow"></span>
+
+      <button mat-icon-button type="button" [matMenuTriggerFor]="moreMenu" aria-label="Повеќе">
+        <mat-icon>more_vert</mat-icon>
+      </button>
+
+      <div class="bar__actions">
+        @if (editable()) {
+          <button mat-stroked-button type="button" (click)="saveDraft()" [disabled]="saving()">
+            <mat-icon>save</mat-icon>
+            <span>Зачувај нацрт</span>
+          </button>
+          <button mat-flat-button type="button" (click)="issue()" [disabled]="saving()">
+            <mat-icon>check_circle</mat-icon>
+            <span>Издај</span>
+          </button>
+        } @else {
+          <button mat-stroked-button type="button" (click)="print()">
+            <mat-icon>print</mat-icon>
+            <span>Печати</span>
+          </button>
+          <button mat-flat-button type="button" (click)="share()">
+            <mat-icon>share</mat-icon>
+            <span>Сподели</span>
+          </button>
+        }
+      </div>
+    </header>
+
+    @if (saving()) {
+      <mat-progress-bar mode="indeterminate" class="no-print" />
+    }
+
+    <!-- validation summary ---------------------------------------------- -->
+    @if (editable() && validation(); as check) {
+      @if (check.errors.length || check.warnings.length) {
+        <section
+          class="issues no-print"
+          [class.issues--error]="check.errors.length > 0"
+        >
+          <mat-icon>{{ check.errors.length ? 'error' : 'warning' }}</mat-icon>
+          <div>
+            <strong>
+              @if (check.errors.length) {
+                {{ check.errors.length }}
+                {{ check.errors.length === 1 ? 'проблем спречува' : 'проблеми спречуваат' }}
+                издавање
+              } @else {
+                {{ check.warnings.length }}
+                {{ check.warnings.length === 1 ? 'предупредување' : 'предупредувања' }}
+              }
+            </strong>
+            <ul>
+              @for (issue of (check.errors.length ? check.errors : check.warnings).slice(0, 4); track issue.path + issue.message) {
+                <li>{{ issue.message }}</li>
+              }
+            </ul>
+            @if ((check.errors.length ? check.errors : check.warnings).length > 4) {
+              <button type="button" class="link" (click)="openUjpPreview()">
+                Прикажи ги сите
+              </button>
+            }
+          </div>
+        </section>
+      }
+    }
+
+    <!-- UJP receipt ------------------------------------------------------ -->
+    @if (inv.ujp; as receipt) {
+      <section class="receipt">
+        <mat-icon>verified</mat-icon>
+        <div>
+          <strong>Регистрирана во УЈП</strong>
+          <div class="receipt__euid">
+            EUID <code>{{ receipt.euid }}</code>
+          </div>
+        </div>
+        <span class="grow"></span>
+        <a [href]="receipt.qrLink" target="_blank" rel="noopener" mat-stroked-button>
+          <mat-icon>qr_code_2</mat-icon>
+          Провери
+        </a>
+      </section>
+    }
+
+    <div class="cols">
+      <!-- ============================ MAIN ============================ -->
+      <div class="col-main">
+        <!-- client -->
+        <section class="card">
+          <div class="card__head">
+            <h2>Купувач</h2>
+            @if (editable() && inv.client.id) {
+              <button type="button" class="link" (click)="openClientDialog(true)">Измени</button>
+            }
+          </div>
+
+          @if (inv.client.name) {
+            <div class="party">
+              <div class="party__name">{{ inv.client.name }}</div>
+              <div class="party__meta">
+                @if (inv.client.taxNumber) {
+                  <span>ЕДБ {{ inv.client.taxNumber }}</span>
+                }
+                @if (inv.client.address.streetAddress) {
+                  <span>
+                    {{ inv.client.address.streetAddress }}
+                    {{ inv.client.address.streetNumber }},
+                    {{ inv.client.address.postalCode }} {{ inv.client.address.city }}
+                  </span>
+                }
+                @if (inv.client.email) {
+                  <span>{{ inv.client.email }}</span>
+                }
+              </div>
+              @if (editable()) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="party__clear no-print"
+                  (click)="clearClient()"
+                  aria-label="Отстрани клиент"
+                >
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="client-pick no-print">
+              <mat-form-field class="client-pick__field">
+                <mat-label>Пребарајте клиент по назив или ЕДБ</mat-label>
+                <mat-icon matPrefix>person_search</mat-icon>
+                <input
+                  matInput
+                  [matAutocomplete]="clientAuto"
+                  [ngModel]="clientQuery()"
+                  (ngModelChange)="clientQuery.set($event)"
+                />
+                <mat-autocomplete #clientAuto="matAutocomplete">
+                  @for (client of clientMatches(); track client.id) {
+                    <mat-option [value]="client.name" (onSelectionChange)="selectClient(client)">
+                      <span class="opt-name">{{ client.name }}</span>
+                      <span class="opt-tin">{{ client.taxNumber }}</span>
+                    </mat-option>
+                  }
+                  @if (clientMatches().length === 0) {
+                    <mat-option disabled>Нема совпаѓања</mat-option>
+                  }
+                </mat-autocomplete>
+              </mat-form-field>
+              <button mat-stroked-button type="button" (click)="openClientDialog(false)">
+                <mat-icon>add</mat-icon>
+                Нов клиент
+              </button>
+            </div>
+          }
+        </section>
+
+        <!-- items -->
+        <section class="card">
+          <div class="card__head">
+            <h2>Ставки</h2>
+            @if (editable()) {
+              <button type="button" class="link" (click)="showAllIndicators.set(!showAllIndicators())">
+                {{ showAllIndicators() ? 'Само чести шифри' : 'Сите даночни шифри' }}
+              </button>
+            }
+          </div>
+
+          <div class="items">
+            @for (line of lines(); track line.item.id; let i = $index, last = $last) {
+              <article class="item" [class.item--readonly]="!editable()">
+                <div class="item__row item__row--desc">
+                  <mat-form-field class="f-grow no-subscript" subscriptSizing="fixed">
+                    <mat-label>Опис</mat-label>
+                    <input
+                      matInput
+                      [ngModel]="line.item.description"
+                      (ngModelChange)="patchItem(i, { description: $event })"
+                      [readonly]="!editable()"
+                    />
+                  </mat-form-field>
+
+                  @if (editable()) {
+                    <button
+                      mat-icon-button
+                      type="button"
+                      [matMenuTriggerFor]="itemMenu"
+                      [matMenuTriggerData]="{ index: i, last: last }"
+                      aria-label="Дејства за ставка"
+                      class="item__menu"
+                    >
+                      <mat-icon>more_vert</mat-icon>
+                    </button>
+                  }
+                </div>
+
+                <div class="item__row item__row--nums">
+                  <mat-form-field class="f-qty no-subscript" subscriptSizing="fixed">
+                    <mat-label>Количина</mat-label>
+                    <input
+                      matInput
+                      type="number"
+                      inputmode="decimal"
+                      step="any"
+                      [ngModel]="line.item.qty"
+                      (ngModelChange)="patchItem(i, { qty: +$event || 0 })"
+                      [readonly]="!editable()"
+                    />
+                  </mat-form-field>
+
+                  <mat-form-field class="f-unit no-subscript" subscriptSizing="fixed">
+                    <mat-label>Ед. мерка</mat-label>
+                    <input
+                      matInput
+                      [matAutocomplete]="unitAuto"
+                      [ngModel]="line.item.unit"
+                      (ngModelChange)="patchItem(i, { unit: $event })"
+                      [readonly]="!editable()"
+                    />
+                    <mat-autocomplete #unitAuto="matAutocomplete">
+                      @for (unit of units(); track unit.code) {
+                        <mat-option [value]="unit.code">{{ unit.code }} — {{ unit.name }}</mat-option>
+                      }
+                    </mat-autocomplete>
+                  </mat-form-field>
+
+                  <mat-form-field class="f-price no-subscript" subscriptSizing="fixed">
+                    <mat-label>
+                      {{ line.item.priceMode === 'gross' ? 'Цена со ДДВ' : 'Цена без ДДВ' }}
+                    </mat-label>
+                    <input
+                      matInput
+                      type="number"
+                      inputmode="decimal"
+                      step="any"
+                      [ngModel]="line.item.unitPrice"
+                      (ngModelChange)="patchItem(i, { unitPrice: +$event || 0 })"
+                      [readonly]="!editable()"
+                    />
+                    @if (editable() && line.vatImpact === 'STANDARD') {
+                      <button
+                        matSuffix
+                        mat-icon-button
+                        type="button"
+                        [matTooltip]="
+                          line.item.priceMode === 'gross'
+                            ? 'Внесувате цена со ДДВ — префрли на без ДДВ'
+                            : 'Внесувате цена без ДДВ — префрли на со ДДВ'
+                        "
+                        (click)="
+                          patchItem(i, {
+                            priceMode: line.item.priceMode === 'gross' ? 'net' : 'gross'
+                          })
+                        "
+                      >
+                        <mat-icon>{{
+                          line.item.priceMode === 'gross' ? 'toggle_on' : 'toggle_off'
+                        }}</mat-icon>
+                      </button>
+                    }
+                  </mat-form-field>
+
+                  <mat-form-field class="f-disc no-subscript" subscriptSizing="fixed">
+                    <mat-label>Попуст %</mat-label>
+                    <input
+                      matInput
+                      type="number"
+                      inputmode="decimal"
+                      step="any"
+                      min="0"
+                      max="100"
+                      [ngModel]="line.item.discountPercent"
+                      (ngModelChange)="patchItem(i, { discountPercent: +$event || 0 })"
+                      [readonly]="!editable()"
+                    />
+                  </mat-form-field>
+
+                  <mat-form-field class="f-tax no-subscript" subscriptSizing="fixed">
+                    <mat-label>Данок</mat-label>
+                    <mat-select
+                      [ngModel]="line.item.taxIndicator"
+                      (ngModelChange)="setIndicator(i, $event)"
+                      [disabled]="!editable()"
+                      [panelWidth]="null"
+                    >
+                      <!-- The field is narrow, so the closed state shows a short
+                           label; the full category name lives in the panel. -->
+                      <mat-select-trigger>{{ indicatorLabel(line.item.taxIndicator) }}</mat-select-trigger>
+                      @for (indicator of indicators(); track indicator.code) {
+                        <mat-option [value]="indicator.code">
+                          <span class="opt-code">{{ indicator.code }}</span>
+                          <span class="opt-desc">{{ indicator.categoryName }}</span>
+                        </mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+
+                <div class="item__calc tabular">
+                  <span class="item__calc-part">
+                    Основица <strong>{{ line.totalPriceWoVat | amount }}</strong>
+                  </span>
+                  @if (line.vatImpact === 'STANDARD') {
+                    <span class="item__calc-part">
+                      ДДВ {{ line.item.vatRate }}% <strong>{{ line.totalVat | amount }}</strong>
+                    </span>
+                  } @else if (line.vatImpact === 'PRENESEN') {
+                    <span class="item__calc-part item__calc-part--note">
+                      Пренесена даночна обврска
+                    </span>
+                  } @else {
+                    <span class="item__calc-part item__calc-part--note">Без ДДВ</span>
+                  }
+                  <span class="grow"></span>
+                  <span class="item__calc-total">
+                    {{ line.totalPriceWVat | money: inv.currency }}
+                  </span>
+                </div>
+              </article>
+            }
+          </div>
+
+          @if (editable()) {
+            <button mat-stroked-button type="button" class="add-item no-print" (click)="addItem()">
+              <mat-icon>add</mat-icon>
+              Додади ставка
+            </button>
+          }
+        </section>
+
+        <!-- notes -->
+        <section class="card">
+          <div class="card__head"><h2>Забелешки</h2></div>
+          <mat-form-field class="w-full">
+            <mat-label>Забелешка на фактурата</mat-label>
+            <textarea
+              matInput
+              rows="2"
+              [ngModel]="inv.notes"
+              (ngModelChange)="setField('notes', $event)"
+              [readonly]="!editable()"
+            ></textarea>
+          </mat-form-field>
+          <mat-form-field class="w-full">
+            <mat-label>Текст на дното</mat-label>
+            <textarea
+              matInput
+              rows="2"
+              [ngModel]="inv.footerText"
+              (ngModelChange)="setField('footerText', $event)"
+              [readonly]="!editable()"
+            ></textarea>
+          </mat-form-field>
+        </section>
+      </div>
+
+      <!-- ============================ SIDE ============================ -->
+      <aside class="col-side">
+        <section class="card">
+          <div class="card__head"><h2>Детали</h2></div>
+
+          <div class="fields">
+            @if (!editable() || inv.number) {
+              <mat-form-field>
+                <mat-label>Број</mat-label>
+                <input matInput [value]="inv.number" readonly />
+              </mat-form-field>
+            } @else {
+              <div class="auto-number">
+                <mat-icon>tag</mat-icon>
+                <span>Бројот се доделува автоматски при издавање.</span>
+              </div>
+            }
+
+            <mat-form-field>
+              <mat-label>Датум на издавање</mat-label>
+              <input
+                matInput
+                [matDatepicker]="issuePicker"
+                [value]="asDate(inv.issueDate)"
+                (dateChange)="setIssueDate($event.value)"
+                [readonly]="!editable()"
+              />
+              <mat-datepicker-toggle matIconSuffix [for]="issuePicker" [disabled]="!editable()" />
+              <mat-datepicker #issuePicker />
+            </mat-form-field>
+
+            <mat-form-field>
+              <mat-label>Датум на промет</mat-label>
+              <input
+                matInput
+                [matDatepicker]="turnoverPicker"
+                [value]="asDate(inv.turnoverDate)"
+                (dateChange)="setTurnoverDate($event.value)"
+                [readonly]="!editable()"
+              />
+              <mat-datepicker-toggle matIconSuffix [for]="turnoverPicker" [disabled]="!editable()" />
+              <mat-datepicker #turnoverPicker />
+              <mat-hint>Определува во кој ДДВ период влегува.</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field>
+              <mat-label>Рок на плаќање</mat-label>
+              <input
+                matInput
+                [matDatepicker]="duePicker"
+                [value]="asDate(inv.dueDate)"
+                (dateChange)="setDueDate($event.value)"
+                [readonly]="!editable()"
+              />
+              <mat-datepicker-toggle matIconSuffix [for]="duePicker" [disabled]="!editable()" />
+              <mat-datepicker #duePicker />
+            </mat-form-field>
+
+            <mat-form-field>
+              <mat-label>Начин на плаќање</mat-label>
+              <mat-select
+                [ngModel]="inv.paymentTypeCode"
+                (ngModelChange)="setPaymentType($event)"
+                [disabled]="!editable()"
+              >
+                @for (type of paymentTypes(); track type.code) {
+                  <mat-option [value]="type.code">{{ type.description }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field>
+              <mat-label>Валута</mat-label>
+              <mat-select
+                [ngModel]="inv.currency"
+                (ngModelChange)="setCurrency($event)"
+                [disabled]="!editable()"
+              >
+                @for (currency of currencies(); track currency.code) {
+                  <mat-option [value]="currency.code">
+                    {{ currency.code }} — {{ currency.description }}
+                  </mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            @if (inv.currency !== 'MKD') {
+              <mat-form-field>
+                <mat-label>Курс кон денар</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  step="any"
+                  [ngModel]="inv.exchangeRate"
+                  (ngModelChange)="setNumeric('exchangeRate', $event)"
+                  [readonly]="!editable()"
+                />
+              </mat-form-field>
+            }
+
+            <mat-form-field>
+              <mat-label>Аванс</mat-label>
+              <input
+                matInput
+                type="number"
+                step="any"
+                min="0"
+                [ngModel]="inv.advanceAmount"
+                (ngModelChange)="setNumeric('advanceAmount', $event)"
+                [readonly]="!editable()"
+              />
+              <span matSuffix class="suffix">{{ inv.currency | currencySymbol }}</span>
+            </mat-form-field>
+          </div>
+        </section>
+
+        <!-- totals -->
+        @if (totals(); as t) {
+          <section class="card card--totals">
+            <div class="card__head"><h2>Пресметка</h2></div>
+
+            <dl class="totals tabular">
+              <div>
+                <dt>Основица</dt>
+                <dd>{{ t.netAmount | amount }}</dd>
+              </div>
+              @if (t.discountAmount > 0) {
+                <div class="totals--muted">
+                  <dt>Попуст</dt>
+                  <dd>− {{ t.discountAmount | amount }}</dd>
+                </div>
+                <div>
+                  <dt>Основица по попуст</dt>
+                  <dd>{{ t.netAmountDisc | amount }}</dd>
+                </div>
+              }
+
+              @for (row of vatTotals(); track row.taxIndicator) {
+                <div class="totals--muted">
+                  <dt>
+                    @if (row.vatImpact === 'PRENESEN') {
+                      ДДВ {{ row.vatPercent }}% (пренесен)
+                    } @else if (row.vatImpact === 'STANDARD') {
+                      ДДВ {{ row.vatPercent }}%
+                    } @else {
+                      {{ row.taxIndicator }}
+                    }
+                  </dt>
+                  <dd>{{ row.vatAmount | amount }}</dd>
+                </div>
+              }
+
+              <div class="totals__sep">
+                <dt>ДДВ вкупно</dt>
+                <dd>{{ t.vatAmount | amount }}</dd>
+              </div>
+              <div>
+                <dt>Вкупно</dt>
+                <dd>{{ t.grossAmount | amount }}</dd>
+              </div>
+              @if (t.grossAmountRounded !== t.grossAmount) {
+                <div class="totals--muted">
+                  <dt>Заокружување</dt>
+                  <dd>{{ t.grossAmountRounded - t.grossAmount | amount }}</dd>
+                </div>
+              }
+              @if (t.advanceAmount > 0) {
+                <div class="totals--muted">
+                  <dt>Аванс</dt>
+                  <dd>− {{ t.advanceAmount | amount }}</dd>
+                </div>
+              }
+              <div class="totals__grand">
+                <dt>За плаќање</dt>
+                <dd>{{ t.finalAmount | money: inv.currency }}</dd>
+              </div>
+            </dl>
+
+            <p class="in-words">{{ amountInWords() }}</p>
+
+            @for (row of vatTotals(); track row.taxIndicator) {
+              @if (row.taxIndicatorNote) {
+                <p class="tax-note">{{ row.taxIndicatorNote }}</p>
+              }
+            }
+
+            <button
+              mat-stroked-button
+              type="button"
+              class="w-full no-print"
+              (click)="openUjpPreview()"
+            >
+              <mat-icon>fact_check</mat-icon>
+              Провери УЈП документ
+            </button>
+          </section>
+        }
+      </aside>
+    </div>
+  </div>
+
+  @if (totals(); as printTotals) {
+    <app-invoice-print
+      [invoice]="inv"
+      [lines]="lines()"
+      [totals]="printTotals"
+      [vatTotals]="vatTotals()"
+      [amountInWords]="amountInWords()"
+    />
+  }
+}
+
+<mat-menu #moreMenu="matMenu">
+  <button mat-menu-item type="button" (click)="duplicate()">
+    <mat-icon>content_copy</mat-icon>
+    <span>Зачувај како нова</span>
+  </button>
+  <button mat-menu-item type="button" (click)="openUjpPreview()">
+    <mat-icon>fact_check</mat-icon>
+    <span>Провери УЈП документ</span>
+  </button>
+  <button mat-menu-item type="button" (click)="print()">
+    <mat-icon>print</mat-icon>
+    <span>Печати / PDF</span>
+  </button>
+  <button mat-menu-item type="button" (click)="share()">
+    <mat-icon>share</mat-icon>
+    <span>Сподели</span>
+  </button>
+  @if (deletable()) {
+    <mat-divider />
+    <button mat-menu-item type="button" class="danger" (click)="remove()">
+      <mat-icon>delete</mat-icon>
+      <span>{{ editable() ? 'Избриши нацрт' : 'Избриши фактура' }}</span>
+    </button>
+  }
+</mat-menu>
+
+<mat-menu #itemMenu="matMenu">
+  <ng-template matMenuContent let-index="index" let-last="last">
+    <button mat-menu-item type="button" (click)="duplicateItem(index)">
+      <mat-icon>content_copy</mat-icon>
+      <span>Дуплирај</span>
+    </button>
+    <button mat-menu-item type="button" [disabled]="index === 0" (click)="moveItem(index, -1)">
+      <mat-icon>arrow_upward</mat-icon>
+      <span>Помести нагоре</span>
+    </button>
+    <button mat-menu-item type="button" [disabled]="last" (click)="moveItem(index, 1)">
+      <mat-icon>arrow_downward</mat-icon>
+      <span>Помести надолу</span>
+    </button>
+    <mat-divider />
+    <button mat-menu-item type="button" (click)="removeItem(index)">
+      <mat-icon>delete</mat-icon>
+      <span>Избриши</span>
+    </button>
+  </ng-template>
+</mat-menu>

@@ -1,0 +1,34 @@
+/*
+ * Tailwind, without preflight.
+ *
+ * Preflight applies `border-style: solid` to every element, which collides with
+ * Angular Material's outlined form field: the notched outline draws its three
+ * pieces with per-side border styles, and forcing them all solid paints a
+ * vertical rule through the middle of every field.
+ *
+ * Material already ships a full reset, and Tailwind is used here only for
+ * layout utilities, so preflight has nothing to contribute. Importing the
+ * layers individually is the supported way to leave it out.
+ */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme {
+  /* Bridge Material 3 system tokens into Tailwind so utilities and components
+     read from one palette. Change the theme in styles.scss and both follow. */
+  --color-surface: var(--mat-sys-surface);
+  --color-surface-container: var(--mat-sys-surface-container);
+  --color-surface-container-low: var(--mat-sys-surface-container-low);
+  --color-surface-container-high: var(--mat-sys-surface-container-high);
+  --color-on-surface: var(--mat-sys-on-surface);
+  --color-on-surface-variant: var(--mat-sys-on-surface-variant);
+  --color-primary: var(--mat-sys-primary);
+  --color-on-primary: var(--mat-sys-on-primary);
+  --color-primary-container: var(--mat-sys-primary-container);
+  --color-on-primary-container: var(--mat-sys-on-primary-container);
+  --color-error: var(--mat-sys-error);
+  --color-outline: var(--mat-sys-outline);
+  --color-outline-variant: var(--mat-sys-outline-variant);
+}

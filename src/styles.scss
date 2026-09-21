@@ -1,0 +1,137 @@
+@use '@angular/material' as mat;
+
+/*
+ * Border-box sizing.
+ *
+ * Normally Tailwind's preflight provides this, but preflight is deliberately
+ * not imported — it forces `border-style: solid` on every element, which paints
+ * a line through Material's notched form-field outline. Dropping preflight took
+ * this rule with it, and without it any `width: 100%` element with horizontal
+ * padding grows *wider* than its parent: the login panel came out 48px past a
+ * 360px phone viewport, so mobile Chrome rendered the page zoomed in and cut
+ * off. `e2e/overflow-check.mjs` guards against a repeat.
+ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: Roboto,
+      density: -1,
+    )
+  );
+
+  // Material's default form fields are visually heavy for a data-entry app like
+  // this one. Tightening the subscript reclaims a lot of vertical rhythm on the
+  // invoice editor, where a dozen fields sit above the fold.
+  @include mat.form-field-overrides(
+    (
+      container-height: 48px,
+      filled-with-label-container-padding-top: 22px,
+      filled-with-label-container-padding-bottom: 6px,
+    )
+  );
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color-scheme: light;
+  background-color: var(--mat-sys-surface-container-low);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+// Numbers in tables and totals must align on the decimal point to be scannable.
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+// Native number spinners are useless for money and quantities — nobody steps an
+// invoice line by 1 — and they eat horizontal space in the already narrow
+// fields of the item editor.
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+// Material form fields inside a dense grid should not reserve hint space unless
+// they actually have an error to show.
+.no-subscript .mat-mdc-form-field-subscript-wrapper {
+  display: none;
+}
+
+// Destructive menu entries. Menus render in an overlay outside the component
+// that opened them, so this has to be global rather than component-scoped.
+.danger .mat-mdc-menu-item-text {
+  color: var(--mat-sys-error);
+}
+
+// Scrollbars: thin and unobtrusive, matching the surface palette.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mat-sys-outline-variant) transparent;
+}
+
+/*
+ * Print.
+ *
+ * Everything that frames the app — the rail, the top bar, the mobile tab bar,
+ * snackbars and any open overlay — is chrome, not document, and must not end up
+ * on the page the buyer receives. The scroll containers also have to be
+ * unwound, or the browser prints only the first viewport's worth.
+ */
+@media print {
+  html,
+  body {
+    height: auto;
+    background: #fff;
+  }
+
+  .no-print,
+  .rail,
+  .topbar,
+  .tabbar,
+  .cdk-overlay-container,
+  .mat-mdc-snack-bar-container,
+  .mat-mdc-tooltip-panel {
+    display: none !important;
+  }
+
+  .shell,
+  .main,
+  .content {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  /* Chrome drops backgrounds by default; the invoice relies on a few. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

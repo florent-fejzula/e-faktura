@@ -1,0 +1,139 @@
+<h2 mat-dialog-title>{{ isEdit ? 'Измени клиент' : 'Нов клиент' }}</h2>
+
+<mat-dialog-content>
+  <form [formGroup]="form" class="grid" (ngSubmit)="save()">
+    <mat-form-field class="span-2">
+      <mat-label>Назив</mat-label>
+      <input matInput formControlName="name" autocomplete="organization" cdkFocusInitial />
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <mat-error>Внесете назив на клиентот.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>ЕДБ</mat-label>
+      <input matInput formControlName="taxNumber" inputmode="numeric" maxlength="13" />
+      @if (form.controls.taxNumber.touched && form.controls.taxNumber.invalid) {
+        <mat-error>13 цифри.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>ДДВ број</mat-label>
+      <input matInput formControlName="vatNumber" />
+      <mat-hint>Се пополнува од ЕДБ</mat-hint>
+    </mat-form-field>
+
+    <mat-form-field class="span-2">
+      <mat-label>Улица</mat-label>
+      <input matInput formControlName="streetAddress" />
+      @if (form.controls.streetAddress.touched && form.controls.streetAddress.invalid) {
+        <mat-error>Внесете улица.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Број</mat-label>
+      <input matInput formControlName="streetNumber" />
+      @if (form.controls.streetNumber.touched && form.controls.streetNumber.invalid) {
+        <mat-error>Внесете број.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Пошт. број</mat-label>
+      <input matInput formControlName="postalCode" inputmode="numeric" maxlength="4" />
+      @if (form.controls.postalCode.touched && form.controls.postalCode.invalid) {
+        <mat-error>4 цифри.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field class="span-2">
+      <mat-label>Град</mat-label>
+      <input matInput formControlName="city" />
+      @if (form.controls.city.touched && form.controls.city.invalid) {
+        <mat-error>Внесете град.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Е-пошта</mat-label>
+      <input matInput type="email" formControlName="email" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Телефон</mat-label>
+      <input matInput formControlName="phone" />
+    </mat-form-field>
+
+    <button
+      type="button"
+      class="more span-2"
+      (click)="showAdvanced.set(!showAdvanced())"
+    >
+      <mat-icon>{{ showAdvanced() ? 'expand_less' : 'expand_more' }}</mat-icon>
+      Дополнителни податоци
+    </button>
+
+    @if (showAdvanced()) {
+      <mat-form-field>
+        <mat-label>Контакт лице</mat-label>
+        <input matInput formControlName="contactPerson" />
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>ЕМБС</mat-label>
+        <input matInput formControlName="registrationNumber" />
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Држава</mat-label>
+        <mat-select formControlName="countryCode">
+          <mat-option value="MK">Северна Македонија</mat-option>
+          <mat-option value="XX">Странство</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      @if (form.controls.countryCode.value !== 'MK') {
+        <mat-form-field>
+          <mat-label>Странски даночен број</mat-label>
+          <input matInput formControlName="foreignTaxNumber" />
+        </mat-form-field>
+      }
+
+      <mat-form-field>
+        <mat-label>Рок на плаќање (дена)</mat-label>
+        <input matInput type="number" formControlName="defaultDueDays" min="0" max="365" />
+        <mat-hint>Го надминува стандардниот за фирмата</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Начин на плаќање</mat-label>
+        <mat-select formControlName="defaultPaymentTypeCode">
+          <mat-option [value]="null">Стандарден</mat-option>
+          @for (type of paymentTypes; track type.code) {
+            <mat-option [value]="type.code">{{ type.description }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field class="span-2">
+        <mat-label>Забелешка</mat-label>
+        <textarea matInput formControlName="notes" rows="2"></textarea>
+      </mat-form-field>
+    }
+  </form>
+  @if (saveError(); as message) {
+    <p class="save-error" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ message }}</span>
+    </p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="ref.close(null)">Откажи</button>
+  <button mat-flat-button type="button" (click)="save()" [disabled]="saving()">
+    {{ isEdit ? 'Зачувај' : 'Додади клиент' }}
+  </button>
+</mat-dialog-actions>

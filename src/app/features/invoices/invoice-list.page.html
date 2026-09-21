@@ -1,0 +1,341 @@
+<div class="page">
+  <header class="page__head">
+    <div>
+      <h1>Фактури</h1>
+      <p class="page__sub">
+        {{ range().from | mkDate }} — {{ range().to | mkDate }} · {{ summary().count }}
+        @if (summary().count === 1) {
+          фактура
+        } @else {
+          фактури
+        }
+      </p>
+    </div>
+
+    <div class="page__actions">
+      <button mat-stroked-button type="button" [matMenuTriggerFor]="rangeMenu">
+        <mat-icon>date_range</mat-icon>
+        Период
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="exportCsv()"
+        [disabled]="!rows().length"
+        matTooltip="Извези во CSV за сметководство"
+      >
+        <mat-icon>download</mat-icon>
+        Извези
+      </button>
+    </div>
+  </header>
+
+  <!-- summary -->
+  <section class="stats" aria-label="Преглед">
+    <div class="stat">
+      <span class="stat__label">Вкупно фактурирано</span>
+      <strong class="stat__value tabular">{{ summary().total | money: currency() }}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat__label">Од тоа ДДВ</span>
+      <strong class="stat__value tabular">{{ summary().vat | money: currency() }}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat__label">Ненаплатено</span>
+      <strong class="stat__value tabular">{{ summary().outstanding | money: currency() }}</strong>
+    </div>
+    <div class="stat" [class.stat--alert]="summary().overdue > 0">
+      <span class="stat__label">Во доцнење</span>
+      <strong class="stat__value tabular">{{ summary().overdue }}</strong>
+    </div>
+  </section>
+
+  <!-- filters -->
+  <section class="filters">
+    <mat-form-field class="filters__search no-subscript" subscriptSizing="fixed">
+      <mat-icon matPrefix>search</mat-icon>
+      <mat-label>Барај по број, клиент, ЕДБ…</mat-label>
+      <input matInput [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      @if (search()) {
+        <button matSuffix mat-icon-button type="button" (click)="search.set('')" aria-label="Исчисти">
+          <mat-icon>close</mat-icon>
+        </button>
+      }
+    </mat-form-field>
+
+    <button
+      mat-stroked-button
+      type="button"
+      class="filters__toggle"
+      (click)="showFilters.set(!showFilters())"
+    >
+      <mat-icon>tune</mat-icon>
+      Филтри
+      @if (activeFilterCount() > 0) {
+        <span class="badge">{{ activeFilterCount() }}</span>
+      }
+    </button>
+
+    @if (activeFilterCount() > 0) {
+      <button mat-button type="button" (click)="clearFilters()">Исчисти</button>
+    }
+  </section>
+
+  @if (showFilters()) {
+    <section class="filters__panel">
+      <mat-form-field>
+        <mat-label>Статус</mat-label>
+        <mat-select
+          multiple
+          [ngModel]="statusFilter()"
+          (ngModelChange)="statusFilter.set($event)"
+        >
+          @for (code of allStatuses; track code) {
+            <mat-option [value]="code">{{ statusLabels[code] }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Наплата</mat-label>
+        <mat-select
+          multiple
+          [ngModel]="paymentFilter()"
+          (ngModelChange)="paymentFilter.set($event)"
+        >
+          <mat-option value="unpaid">Неплатена</mat-option>
+          <mat-option value="partial">Делумно платена</mat-option>
+          <mat-option value="paid">Платена</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Клиент</mat-label>
+        <mat-select
+          multiple
+          [ngModel]="clientFilter()"
+          (ngModelChange)="clientFilter.set($event)"
+        >
+          @for (client of clients(); track client.id) {
+            <mat-option [value]="client.id">{{ client.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Износ од</mat-label>
+        <input
+          matInput
+          type="number"
+          inputmode="decimal"
+          [ngModel]="minAmount()"
+          (ngModelChange)="minAmount.set($event === null || $event === '' ? null : +$event)"
+        />
+        <span matSuffix class="suffix">{{ currency() | currencySymbol }}</span>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Износ до</mat-label>
+        <input
+          matInput
+          type="number"
+          inputmode="decimal"
+          [ngModel]="maxAmount()"
+          (ngModelChange)="maxAmount.set($event === null || $event === '' ? null : +$event)"
+        />
+        <span matSuffix class="suffix">{{ currency() | currencySymbol }}</span>
+      </mat-form-field>
+    </section>
+  }
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  @if (!loading() && rows().length === 0) {
+    <div class="empty">
+      <mat-icon>receipt_long</mat-icon>
+      @if (invoices().length === 0) {
+        <h2>Сè уште нема фактури</h2>
+        <p>Издајте ја вашата прва фактура — потребни се само клиент и една ставка.</p>
+        @if (companies.canIssue()) {
+          <a mat-flat-button routerLink="/fakturi/nova">
+            <mat-icon>add</mat-icon>
+            Нова фактура
+          </a>
+        }
+      } @else {
+        <h2>Нема резултати</h2>
+        <p>Ниту една фактура не одговара на филтрите.</p>
+        <button mat-stroked-button type="button" (click)="clearFilters()">Исчисти филтри</button>
+      }
+    </div>
+  } @else {
+    <!-- desktop table -->
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            @for (col of [
+              { key: 'number', label: 'Број', numeric: false },
+              { key: 'issueDate', label: 'Датум', numeric: false },
+              { key: 'client', label: 'Клиент', numeric: false },
+              { key: 'dueDate', label: 'Рок', numeric: false },
+              { key: 'net', label: 'Основица', numeric: true },
+              { key: 'vat', label: 'ДДВ', numeric: true },
+              { key: 'total', label: 'Вкупно', numeric: true },
+              { key: 'status', label: 'Статус', numeric: false },
+              { key: 'payment', label: 'Наплата', numeric: false }
+            ]; track col.key) {
+              <th
+                [class.num]="col.numeric"
+                [attr.aria-sort]="
+                  sortKey() === col.key ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
+                "
+              >
+                <button type="button" class="sort" (click)="toggleSort($any(col.key))">
+                  <span>{{ col.label }}</span>
+                  <mat-icon class="sort__icon" [class.sort__icon--on]="sortKey() === col.key">
+                    {{ sortKey() === col.key && sortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                  </mat-icon>
+                </button>
+              </th>
+            }
+            <th class="actions-col" aria-label="Дејства"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (invoice of rows(); track invoice.id) {
+            <tr
+              class="row"
+              [class.row--draft]="invoice.issuedAt === null"
+              [routerLink]="['/fakturi', invoice.id]"
+              tabindex="0"
+            >
+              <td class="num-cell">
+                <span class="number">{{ invoice.number || 'Нацрт' }}</span>
+              </td>
+              <td>{{ invoice.issueDate | mkDate }}</td>
+              <td class="client-cell">
+                <span class="client-name">{{ invoice.client.name || '—' }}</span>
+                @if (invoice.client.taxNumber) {
+                  <span class="client-tin">{{ invoice.client.taxNumber }}</span>
+                }
+              </td>
+              <td [class.overdue]="isOverdue(invoice)">
+                {{ invoice.dueDate | mkDate }}
+                @if (isOverdue(invoice)) {
+                  <mat-icon class="overdue-icon" matTooltip="Во доцнење">error</mat-icon>
+                }
+              </td>
+              <td class="num tabular">{{ invoice.totals.netAmountDisc | amount }}</td>
+              <td class="num tabular">{{ invoice.totals.vatAmount | amount }}</td>
+              <td class="num tabular strong">{{ invoice.totals.finalAmount | amount }}</td>
+              <td><app-status-chip [status]="invoice.status" [issued]="invoice.issuedAt !== null" /></td>
+              <td><app-status-chip [payment]="invoice.paymentStatus" /></td>
+              <td class="actions-col">
+                <button
+                  mat-icon-button
+                  type="button"
+                  [matMenuTriggerFor]="rowMenu"
+                  [matMenuTriggerData]="{ invoice: invoice }"
+                  (click)="$event.stopPropagation(); $event.preventDefault()"
+                  aria-label="Дејства"
+                >
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- handset cards -->
+    <ul class="cards">
+      @for (invoice of rows(); track invoice.id) {
+        <li class="card">
+          <a class="card__main" [routerLink]="['/fakturi', invoice.id]">
+            <div class="card__top">
+              <span class="number">{{ invoice.number || 'Нацрт' }}</span>
+              <strong class="tabular">{{ invoice.totals.finalAmount | money: invoice.currency }}</strong>
+            </div>
+            <div class="card__client">{{ invoice.client.name || '—' }}</div>
+            <div class="card__meta">
+              <span>{{ invoice.issueDate | mkDate }}</span>
+              <span class="dot">·</span>
+              <span [class.overdue]="isOverdue(invoice)">рок {{ invoice.dueDate | mkDate }}</span>
+            </div>
+            <div class="card__chips">
+              <app-status-chip [status]="invoice.status" [issued]="invoice.issuedAt !== null" />
+              <app-status-chip [payment]="invoice.paymentStatus" />
+            </div>
+          </a>
+          <button
+            mat-icon-button
+            type="button"
+            class="card__menu"
+            [matMenuTriggerFor]="rowMenu"
+            [matMenuTriggerData]="{ invoice: invoice }"
+            aria-label="Дејства"
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+</div>
+
+<mat-menu #rangeMenu="matMenu">
+  @for (quick of quickRanges(); track quick.label) {
+    <button mat-menu-item type="button" (click)="applyQuickRange(quick)">
+      {{ quick.label }}
+    </button>
+  }
+  <mat-divider />
+  <div class="range-custom" (click)="$event.stopPropagation()">
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Од</mat-label>
+      <input matInput [matDatepicker]="fromPicker" [value]="rangeStartDate()"
+             (dateChange)="setRangeStart($event.value)" />
+      <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
+      <mat-datepicker #fromPicker />
+    </mat-form-field>
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>До</mat-label>
+      <input matInput [matDatepicker]="toPicker" [value]="rangeEndDate()"
+             (dateChange)="setRangeEnd($event.value)" />
+      <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
+      <mat-datepicker #toPicker />
+    </mat-form-field>
+  </div>
+</mat-menu>
+
+<mat-menu #rowMenu="matMenu">
+  <ng-template matMenuContent let-invoice="invoice">
+    <a mat-menu-item [routerLink]="['/fakturi', invoice.id]">
+      <mat-icon>open_in_new</mat-icon>
+      <span>Отвори</span>
+    </a>
+    <button mat-menu-item type="button" (click)="share(invoice)">
+      <mat-icon>share</mat-icon>
+      <span>Сподели</span>
+    </button>
+    <button mat-menu-item type="button" (click)="duplicate(invoice)">
+      <mat-icon>content_copy</mat-icon>
+      <span>Зачувај како нова</span>
+    </button>
+    <button mat-menu-item type="button" (click)="togglePaid(invoice)">
+      <mat-icon>{{ invoice.paymentStatus === 'paid' ? 'money_off' : 'paid' }}</mat-icon>
+      <span>{{ invoice.paymentStatus === 'paid' ? 'Означи неплатена' : 'Означи платена' }}</span>
+    </button>
+    @if (canDelete(invoice)) {
+      <mat-divider />
+      <button mat-menu-item type="button" class="danger" (click)="remove(invoice)">
+        <mat-icon>delete</mat-icon>
+        <span>{{ isDraft(invoice) ? 'Избриши нацрт' : 'Избриши фактура' }}</span>
+      </button>
+    }
+  </ng-template>
+</mat-menu>

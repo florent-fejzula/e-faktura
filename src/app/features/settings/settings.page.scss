@@ -1,0 +1,218 @@
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 20px 20px 48px;
+}
+
+@media (max-width: 599px) {
+  .page {
+    padding: 14px 10px 32px;
+  }
+}
+
+.page__head h1 {
+  margin: 0;
+  font: var(--mat-sys-headline-small);
+}
+
+.page__sub {
+  margin: 2px 0 16px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+mat-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  mat-icon {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  padding-top: 10px;
+  /* Fields keep their natural height: a neighbour whose hint wraps to two
+     lines would otherwise stretch this one's outline into a tall empty box. */
+  align-items: start;
+}
+
+@media (max-width: 599px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.span-2 {
+  grid-column: 1 / -1;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.env {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  line-height: 1.5;
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.preview {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.preview__label {
+  font: var(--mat-sys-body-small);
+}
+
+.preview__value {
+  font: var(--mat-sys-headline-small);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.chip {
+  padding: 7px 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 999px;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-medium);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+}
+
+.chip--active {
+  border-color: transparent;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.status {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #1b8a4b 12%, transparent);
+
+  > mat-icon {
+    flex: none;
+    color: #0f6b38;
+  }
+
+  p {
+    margin: 3px 0 0;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+    line-height: 1.5;
+  }
+}
+
+.status--off {
+  background: var(--mat-sys-surface-container-high);
+
+  > mat-icon {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.divider {
+  margin: 20px 0 14px;
+}
+
+.sub {
+  margin: 0 0 10px;
+  font: var(--mat-sys-title-small);
+}
+
+.codebooks {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.codebooks__stat {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+
+  strong {
+    font: var(--mat-sys-title-medium);
+    font-variant-numeric: tabular-nums;
+  }
+
+  span {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+  }
+}
+
+/* Subscription facts: a two-column definition list reads faster than a form. */
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+  }
+
+  dd {
+    margin: 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.uid {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--mat-sys-surface-container-high);
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+  font-size: 12px;
+  user-select: all;
+}

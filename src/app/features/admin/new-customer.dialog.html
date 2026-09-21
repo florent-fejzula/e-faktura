@@ -1,0 +1,271 @@
+@if (issued(); as credentials) {
+  <!-- Handover: the only moment the password is ever visible. -->
+  <h2 mat-dialog-title>
+    <mat-icon class="ok">check_circle</mat-icon>
+    Сметката е создадена
+  </h2>
+
+  <mat-dialog-content>
+    <p class="lede">
+      „{{ credentials.companyName }}“ може да се најави веднаш. Податоците за фирмата се
+      внесени — нема ништо друго за пополнување.
+    </p>
+
+    <div class="creds">
+      <div class="cred">
+        <span class="cred__label">Е-пошта</span>
+        <code class="cred__value">{{ credentials.email }}</code>
+        <button
+          mat-icon-button
+          type="button"
+          (click)="copy(credentials.email, 'email')"
+          [matTooltip]="copied() === 'email' ? 'Копирано' : 'Копирај'"
+          aria-label="Копирај е-пошта"
+        >
+          <mat-icon>{{ copied() === 'email' ? 'done' : 'content_copy' }}</mat-icon>
+        </button>
+      </div>
+
+      <div class="cred">
+        <span class="cred__label">Лозинка</span>
+        <code class="cred__value">{{ grouped() }}</code>
+        <button
+          mat-icon-button
+          type="button"
+          (click)="copy(credentials.password, 'password')"
+          [matTooltip]="copied() === 'password' ? 'Копирано' : 'Копирај'"
+          aria-label="Копирај лозинка"
+        >
+          <mat-icon>{{ copied() === 'password' ? 'done' : 'content_copy' }}</mat-icon>
+        </button>
+      </div>
+      <p class="cred__hint">
+        Цртичките се само за читање наглас — лозинката е
+        <strong>{{ credentials.password.length }}</strong> знаци без нив.
+      </p>
+    </div>
+
+    <p class="warn" role="alert">
+      <mat-icon>warning</mat-icon>
+      <span>
+        Лозинката не се чува никаде и нема да може повторно да се прикаже. Копирајте ја сега.
+      </span>
+    </p>
+
+    <label class="message">
+      <span class="message__label">Готова порака за испраќање</span>
+      <textarea readonly rows="9">{{ handoverMessage() }}</textarea>
+    </label>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-stroked-button type="button" (click)="copy(handoverMessage(), 'message')">
+      <mat-icon>{{ copied() === 'message' ? 'done' : 'content_copy' }}</mat-icon>
+      {{ copied() === 'message' ? 'Копирано' : 'Копирај порака' }}
+    </button>
+    <button mat-flat-button type="button" (click)="finish()">Готово</button>
+  </mat-dialog-actions>
+} @else {
+  <h2 mat-dialog-title>Нов корисник</h2>
+
+  <mat-dialog-content>
+    <form [formGroup]="form" class="grid" (ngSubmit)="create()">
+      <h3 class="section span-2">Фирма</h3>
+
+      <mat-form-field class="span-2">
+        <mat-label>Назив</mat-label>
+        <input matInput formControlName="name" autocomplete="off" cdkFocusInitial />
+        @if (form.controls.name.touched && form.controls.name.invalid) {
+          <mat-error>Внесете назив на фирмата.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>ЕДБ</mat-label>
+        <input matInput formControlName="taxNumber" inputmode="numeric" maxlength="13" />
+        @if (form.controls.taxNumber.touched && form.controls.taxNumber.invalid) {
+          <mat-error>13 цифри.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>ЕМБС</mat-label>
+        <input matInput formControlName="registrationNumber" inputmode="numeric" />
+        <mat-hint>Се печати на фактурата</mat-hint>
+      </mat-form-field>
+
+      <mat-checkbox formControlName="isVatRegistered" class="span-2">
+        Регистриран за ДДВ
+      </mat-checkbox>
+
+      @if (form.controls.isVatRegistered.value) {
+        <mat-form-field class="span-2">
+          <mat-label>ДДВ број</mat-label>
+          <input matInput formControlName="vatNumber" />
+          <mat-hint>Се пополнува од ЕДБ</mat-hint>
+        </mat-form-field>
+      }
+
+      <h3 class="section span-2">Адреса</h3>
+
+      <mat-form-field class="span-2">
+        <mat-label>Улица</mat-label>
+        <input matInput formControlName="streetAddress" />
+        @if (form.controls.streetAddress.touched && form.controls.streetAddress.invalid) {
+          <mat-error>Внесете улица.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Број</mat-label>
+        <input matInput formControlName="streetNumber" />
+        @if (form.controls.streetNumber.touched && form.controls.streetNumber.invalid) {
+          <mat-error>Внесете број.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Пошт. број</mat-label>
+        <input matInput formControlName="postalCode" inputmode="numeric" maxlength="4" />
+        @if (form.controls.postalCode.touched && form.controls.postalCode.invalid) {
+          <mat-error>4 цифри.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field class="span-2">
+        <mat-label>Град</mat-label>
+        <input matInput formControlName="city" />
+        @if (form.controls.city.touched && form.controls.city.invalid) {
+          <mat-error>Внесете град.</mat-error>
+        }
+      </mat-form-field>
+
+      <h3 class="section span-2">Банка</h3>
+
+      <mat-form-field>
+        <mat-label>Трансакциска сметка</mat-label>
+        <input matInput formControlName="accountNumber" inputmode="numeric" />
+        <mat-hint>Се печати на фактурите</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Банка</mat-label>
+        <input matInput formControlName="bankName" />
+      </mat-form-field>
+
+      <h3 class="section span-2">Контакт</h3>
+
+      <mat-form-field>
+        <mat-label>Контакт лице</mat-label>
+        <input matInput formControlName="contactPerson" />
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Телефон</mat-label>
+        <input matInput formControlName="phone" />
+      </mat-form-field>
+
+      <mat-form-field class="span-2">
+        <mat-label>Е-пошта на фирмата</mat-label>
+        <input matInput type="email" formControlName="email" autocomplete="off" />
+        <mat-hint>Се пренесува во полето за најава подолу</mat-hint>
+      </mat-form-field>
+
+      <h3 class="section span-2">Најава</h3>
+
+      <mat-form-field class="span-2">
+        <mat-label>Е-пошта за најава</mat-label>
+        <input matInput type="email" formControlName="loginEmail" autocomplete="off" />
+        @if (form.controls.loginEmail.touched && form.controls.loginEmail.invalid) {
+          <mat-error>Внесете важечка е-пошта.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field class="span-2">
+        <mat-label>Лозинка</mat-label>
+        <input
+          matInput
+          [type]="showPassword() ? 'text' : 'password'"
+          formControlName="password"
+          autocomplete="new-password"
+          spellcheck="false"
+        />
+        <button
+          mat-icon-button
+          matIconSuffix
+          type="button"
+          (click)="showPassword.set(!showPassword())"
+          [attr.aria-label]="showPassword() ? 'Сокриј лозинка' : 'Прикажи лозинка'"
+        >
+          <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          matIconSuffix
+          type="button"
+          (click)="regeneratePassword()"
+          matTooltip="Генерирај нова"
+          aria-label="Генерирај нова лозинка"
+        >
+          <mat-icon>refresh</mat-icon>
+        </button>
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <mat-error>Најмалку 12 знаци.</mat-error>
+        } @else {
+          <mat-hint>Генерирана автоматски — може и да се смени рачно</mat-hint>
+        }
+      </mat-form-field>
+
+      <h3 class="section span-2">Претплата</h3>
+
+      <mat-form-field>
+        <mat-label>Период</mat-label>
+        <mat-select formControlName="preset">
+          <mat-option value="trial30">Пробна — 30 дена</mat-option>
+          <mat-option value="paid180">Платена — 6 месеци</mat-option>
+          <mat-option value="paid365">Платена — 1 година</mat-option>
+          <mat-option value="custom">Прилагоден датум</mat-option>
+        </mat-select>
+        @if (!isCustomPeriod()) {
+          <mat-hint>Важи до {{ paidUntilLabel() }}</mat-hint>
+        }
+      </mat-form-field>
+
+      @if (isCustomPeriod()) {
+        <mat-form-field>
+          <mat-label>Плати до</mat-label>
+          <input
+            matInput
+            [matDatepicker]="untilPicker"
+            [value]="asDate(form.controls.paidUntil.value)"
+            (dateChange)="setPaidUntil($event.value)"
+          />
+          <mat-datepicker-toggle matIconSuffix [for]="untilPicker" />
+          <mat-datepicker #untilPicker />
+        </mat-form-field>
+      }
+
+      <mat-form-field class="span-2">
+        <mat-label>Забелешка</mat-label>
+        <input matInput formControlName="note" />
+        <mat-hint>Само за вас — договор, фактура, кој да се јави</mat-hint>
+      </mat-form-field>
+    </form>
+
+    @if (saveError(); as message) {
+      <p class="save-error" role="alert">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ message }}</span>
+      </p>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" [disabled]="saving()" (click)="ref.close(null)">
+      Откажи
+    </button>
+    <button mat-flat-button type="button" [disabled]="saving()" (click)="create()">
+      {{ saving() ? 'Се создава…' : 'Создај сметка' }}
+    </button>
+  </mat-dialog-actions>
+}

@@ -1,0 +1,144 @@
+<div class="page">
+  <header class="page__head">
+    <div>
+      <h1>Клиенти</h1>
+      <p class="page__sub">{{ clients().length }} во листата</p>
+    </div>
+    <button mat-flat-button type="button" (click)="openDialog()">
+      <mat-icon>person_add</mat-icon>
+      Нов клиент
+    </button>
+  </header>
+
+  <div class="tools">
+    <mat-form-field class="tools__search no-subscript" subscriptSizing="fixed">
+      <mat-icon matPrefix>search</mat-icon>
+      <mat-label>Барај по назив, ЕДБ или е-пошта</mat-label>
+      <input matInput [ngModel]="search()" (ngModelChange)="search.set($event)" />
+      @if (search()) {
+        <button matSuffix mat-icon-button type="button" (click)="search.set('')" aria-label="Исчисти">
+          <mat-icon>close</mat-icon>
+        </button>
+      }
+    </mat-form-field>
+
+    <button mat-stroked-button type="button" [matMenuTriggerFor]="sortMenu">
+      <mat-icon>swap_vert</mat-icon>
+      @switch (sort()) {
+        @case ('recent') {
+          Последно фактурирани
+        }
+        @case ('billed') {
+          По промет
+        }
+        @case ('count') {
+          По број фактури
+        }
+        @default {
+          По азбучен ред
+        }
+      }
+    </button>
+  </div>
+
+  @if (!loading() && clients().length === 0) {
+    <div class="empty">
+      <mat-icon>groups</mat-icon>
+      @if (search()) {
+        <h2>Нема совпаѓања</h2>
+        <p>Ниту еден клиент не одговара на „{{ search() }}“.</p>
+        <button mat-stroked-button type="button" (click)="search.set('')">Исчисти пребарување</button>
+      } @else {
+        <h2>Сè уште нема клиенти</h2>
+        <p>Додајте клиент еднаш и потоа го бирате со едно пишување при секоја фактура.</p>
+        <button mat-flat-button type="button" (click)="openDialog()">
+          <mat-icon>person_add</mat-icon>
+          Нов клиент
+        </button>
+      }
+    </div>
+  } @else {
+    <ul class="list">
+      @for (client of clients(); track client.id) {
+        <li class="item">
+          <button type="button" class="item__main" (click)="openDialog(client)">
+            <span class="item__avatar" aria-hidden="true">{{ client.name.charAt(0) }}</span>
+            <span class="item__body">
+              <span class="item__name">{{ client.name }}</span>
+              <span class="item__meta">
+                @if (client.taxNumber) {
+                  <span class="tabular">ЕДБ {{ client.taxNumber }}</span>
+                }
+                @if (formatAddress(client.address)) {
+                  <span class="dot">·</span>
+                  <span>{{ formatAddress(client.address) }}</span>
+                }
+              </span>
+            </span>
+          </button>
+
+          <div class="item__stats tabular">
+            @if (client.invoiceCount > 0) {
+              <span class="item__stat">
+                <strong>{{ client.invoiceCount }}</strong>
+                <span>фактури</span>
+              </span>
+              <span class="item__stat">
+                <strong>{{ client.totalBilled | amount: 0 }}</strong>
+                <span>{{ currency() | currencySymbol }}</span>
+              </span>
+            } @else {
+              <span class="item__stat item__stat--empty">Без фактури</span>
+            }
+          </div>
+
+          <div class="item__actions">
+            <button
+              mat-icon-button
+              type="button"
+              (click)="newInvoice(client)"
+              matTooltip="Нова фактура за овој клиент"
+              aria-label="Нова фактура"
+            >
+              <mat-icon>post_add</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              [matMenuTriggerFor]="rowMenu"
+              [matMenuTriggerData]="{ client: client }"
+              aria-label="Дејства"
+            >
+              <mat-icon>more_vert</mat-icon>
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</div>
+
+<mat-menu #sortMenu="matMenu">
+  <button mat-menu-item type="button" (click)="sort.set('name')">По азбучен ред</button>
+  <button mat-menu-item type="button" (click)="sort.set('recent')">Последно фактурирани</button>
+  <button mat-menu-item type="button" (click)="sort.set('billed')">По промет</button>
+  <button mat-menu-item type="button" (click)="sort.set('count')">По број фактури</button>
+</mat-menu>
+
+<mat-menu #rowMenu="matMenu">
+  <ng-template matMenuContent let-client="client">
+    <button mat-menu-item type="button" (click)="newInvoice(client)">
+      <mat-icon>post_add</mat-icon>
+      <span>Нова фактура</span>
+    </button>
+    <button mat-menu-item type="button" (click)="openDialog(client)">
+      <mat-icon>edit</mat-icon>
+      <span>Измени</span>
+    </button>
+    <mat-divider />
+    <button mat-menu-item type="button" class="danger" (click)="remove(client)">
+      <mat-icon>delete</mat-icon>
+      <span>Избриши</span>
+    </button>
+  </ng-template>
+</mat-menu>

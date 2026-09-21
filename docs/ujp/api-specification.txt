@@ -1,0 +1,1407 @@
+API Спецификација | wiki Ефактура¶ Праќање на документи кон системот еФактура
+Линк за превземање на пример: json_primeri_25.8.2026.pdf
+Линк за упатства: api-documentation.pdf
+Предуслови:
+- Корисникот кој праќа документи кон системот еФактура треба да има дозволен пристап, и право за генерирање на документи во системот е-Фактура. (Оваа операција се извршува преку еУЈП, упатство на линк: Доделување пристап во еУЈП
+- Корисникот мора да го има регистрирано сертификатот за потпишување на системот е-Фактура.
+Процесот на креирање JSON и верификација се одвива во неколку чекори:
+Генерирање на JSON документ со сите потребни полиња. Зависно од тоа за кој тип на документ станува збор одредени полиња ќе бидат задолжителни, а другите може, а и не мора да се пополнуваат
+Дигитално потпишување со квалификуван сертификат на даночниот обврзник и генерирање на JWS барање.
+Испраќање до УЈП сервисот за е-Фактури. За ова се користи API сервис (види API сервис Управување со Документи).
+Валидација на пратените податоци.
+Добивање на EUID код (E-Invoice Unique ID), датум и време на прием и линк за преглед на документот.
+Финално, документот се означува со временски жиг (датум и време на прием).
+Вметнување на добиениот EUID код како текст и/или како QR код во самиот документ.
+[IMG]
+¶ ВАЛИДАЦИИ
+При примање на документ системот го прифаќа документот, само доколку успешно поминат сите валидации.
+Во спротивно јавува код за грешка.
+¶ Валидација на requestTimestamp
+Прво се прави проверка на requestTimestamp за заштита од replay attacks.
+Форматот на requestTimestamp треба да биде 2026-01-05T12:00:00 а времето треба да биде во временска зона со Скопје.
+Додавање на requestTimestamp во signedJson (JWS – JSON Web Signature) е многу добра практика затоа што додава временски контекст на потпишаното барање и значително помага против replay attacks.
+Што е replay attack?
+Replay attack е кога напаѓач ќе пресретне валидно потпишано барање и подоцна ќе го испрати повторно, без да го знае приватниот клуч, лозинката или сертификатот на испраќачот.
+Ако во потпишаниот payload има: "requestTimestamp" тогаш timestamp-от е дел од потписот. Тоа значи:
+не може да се смени без да се расипе потписот
+серверот знае кога било креирано барањето
+серверот може да дозволи само барања во краток временски прозорец (пример ±5 минути)
+Пример правило на сервер
+if abs(now - requestTimestamp) > 300 sec → reject request
+За еФактура ова е дополнително важно бидејќи спречува:
+иста еФактура да не се прати двапати
+старо потпишано барање да не се репушти
+точен временски доказ
+¶ Валидација на податоците
+Најпрво се проверува дали корисникот има право за потпишување за таа фирма со тој сертификат. За таа цел се користат податоците кои се праќаат во JSON-от (header).
+Се вршат валидации за да се утврди дали се пополнети сите задолжителни полиња, согласно типот на документот што се испраќа.
+Од payload делот се проверуваат податоците за издавач, примач, продавач и купувач:
+- дали се валидни,
+- дали постојат во регистрите под ист назив и даночен број,
+- дали се пополнети сите потребни полиња според типот на документ,
+- дали се користени точни шифри од шифрарниците,
+- дали се наведени потребните референтни документи и сл.
+Одредени проверки може да се прескокнат, во зависност од типот на документот.
+4. Потоа се врши валидација на износите:
+- на ниво на ставка,
+- на ниво на вкупни износи за документот,
+- на вкупни износи за даноци по даночна стапка, групирани по даночен индикатор.
+Во зависност од даночниот индикатор, се прават различни проверки (на пр. за член 32, даночно ослободување и сл.).
+5. Валидација на потписот со регистрираниот сертификат.
+6. Проверка дали е потпишан со точен сертификат и дали податоците не се менувани.
+7. Валидација на важноста на сертификатот.
+8. Доколку сите податоци се валидни системот враќа уникатен EUID- еднозначен број на примениот документ, временски печат и линк кој треба да се испечати на документот како QR Code
+Доколку било која валидација не помине или падне процесот во било кој чекор се генерира соодветен код и опис на грешка или грешки доколку се повеќе, со детали и кој податок е проблем (ред, параметар и сл.)
+¶ Валидација на шифрарници
+Полињата од документот кои се дефинирани во шифрарници мора да бидат правилно пополнети. Тоа се полињата:
+"docType": "100",
+"docTypeName": "Општа Фактура",
+"docTypeRef": "NAR",
+"docNameRef": "Нарачка",
+"sellerCCode": "MK",
+"sellerCName": "Северна Македонија",
+"docItemVatGroup": "DDV-B",
+"docItemTaxIndicator": "DDV-B",
+"vatTaxIndicator": "DDV-B",
+"vatCode": "DDV-B",
+"docPaymentTypeCode": "P12",
+"docPaymentTypeDesc": "Плаќање преку банка",
+"docCurrency": "MKD",
+"docCurrencyCode": "MKD",
+Може да се следи примерот кој е поставен тука, или страната за шифрарници.
+¶ Валидација на износи и тотали
+Формули за пресметување на тотали:
+DocItem
+docItemUnitPriceWoVat = docItemUnitOriginalPriceWoVat - docItemUnitDiscountAmount
+docItemUnitVat = docItemUnitPriceWoVat * docItemVat / 100
+docItemTotalOriginalPriceWoVat = docItemQty * docItemUnitOriginalPriceWoVat
+docItemTotalPriceWoVat = docItemQty * docItemUnitPriceWoVat
+docItemTotalVat = docItemQty * docItemUnitVat
+docItemTotalPriceWVat = docItemTotalPriceWoVat + docItemTotalVat
+DocTotals
+docNetAmount = Σ docItemTotalOriginalPriceWoVat
+docDiscountAmount = Σ docItemQty * docItemUnitDiscountAmount
+docNetAmountDisc = docNetAmount - docDiscountAmount
+docVatAmount = Σ docItemTotalVat
+docGrossAmount = docNetAmountDisc (или docNetAmount ако нема попуст) + docVatAmount
+docFinalAmount = docGrossAmountR - docAvansAmount
+VatTotals (групирано по docItemVatGroup и docItemTaxIndicator)
+vatTaxableAmount = Σ docItemTotalPriceWoVat
+vatAmount = Σ docItemTotalVat
+vatTotalAmount = Σ docItemTotalPriceWVat
+Σ = Сума
+¶ Валидација на даночни индикатори
+Кај даночните индикатори има поле: "vatImpact".
+Може да ги има следните вредности:
+STANDARDNULAOSLOBODENPRENESEN
+Според вредноста на "vatImpact" се прават пресметките и валидациите на вредностите за ДДВ.
+STANDARD - Стандардна пресметка на ДДВ (5%, 10% и 18%). Се пресметува и се искажува ДДВ.NULA - Стандардна пресметка за артикли со ДДВ стапка од 0%. Не се пресметува ДДВ, се искажува 0.OSLOBODEN - Промет ослободен од ДДВ. Не се пресметува и не се искажува (во JSON се праќа 0).PRENESEN - Пренесена даночна обврска по Член 32. Не се пресметува кај ставките и тоталите на документ, ама се прикажува кај тоталите по даночен индикатор со напомена за пренос. Пример има тука.
+¶ API Documentation
+Линкот каде се поставени сите потребни API за тестирање на сервисите (за шифрарници) е:
+https://efakturatest.ujp.gov.mk/einvoice_api/
+Сите сервиси може да се прегледаат и тестираат преку Swagger:
+https://efakturatest.ujp.gov.mk/einvoice_api/swagger-ui/index.html
+URL за праќање документи:
+https://efakturatest.ujp.gov.mk/JSONReceiver/api/v1/sales-invoices/send
+Кај сите сервиси мора да се праќаат Request Headers:
+- `X-EUJP-ID` // Единствен идентификатор на корисникот (потписник) EUJP-ID
+- `X-EDB` // Даночен број на компанијата која е вршител на промет
+Во ситуации каде е потребен или има потпишување мора да се праќа и
+- `X-SERIAL-NUMBER` // Сериски број на дигиталниот сертификат
+На ниво на корисник има поставено ограничување од 1 request во секунда.
+¶ Време на сервер
+Сервис за добивање на серверско време во формат за requestTimestamp
+GET - /api/v1/server-time - Добиј серверско време
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"timestamp" : "2025-11-19T10:45:51"
+}
+¶ Валути
+Овој сервис овозможува добивање листа на валути.
+Се користи за прикажување на поддржани валути кои се користат при издавање и обработка на документите.
+GET - /api/v1/currency
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2025-11-19T10:45:51", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"currencyList": [
+{
+"code": "MKD", // Нумерички ISO код на валутата
+"name": "MKD", // Кратенка на валутата (ISO 4217)
+"description": "Македонски денар" // Опис / име на валутата
+},
+{
+"code": "EUR",
+"name": "EUR",
+"description": "Евро"
+},
+{
+"code": "USD",
+"name": "USD",
+"description": "Американски долар"
+},
+…
+]
+}
+¶ Курс на Валути
+Овој сервис овозможува пребарување детали за размена на валути.
+Се користи за прикажување на поддржани валути кои се користат при издавање и обработка на документите.
+POST - /api/v1/currency-exchange/rate
+Request Body
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"currencyName": "EUR",
+"date": "2026-04-08"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-04-29T11:29:33",
+"errorStatus": null,
+"currencyExcange": {
+"id": 3799,
+"currencyId": 76,
+"country": "EMU",
+"code": "978",
+"name": "EUR",
+"date": "2026-04-29",
+"middleRate": 61.695
+}
+}
+¶ Држави
+Овој сервис овозможува добивање листа на држави.
+Листата содржи информации за државите, како код, име и даночен идентификациски број (TIN).
+Враќа сортиран список на држави по страници.
+POST - /api/v1/countries/list
+Request Body:
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"page": 0,
+"size": 20,
+"sortBy": "code",
+"sortDirection": "ASC"
+}
+Response
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2026-01-04T23:00:48", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"content": [
+{
+"code": "AF", // Код на државата(ISO)
+"name": "Авганистан", // Име на државата
+"tin": "AF001" // Даночен идентификациски број на државата
+},
+{
+"code": "AL",
+"name": "Албанија",
+"tin": "AL001"
+},
+...
+],
+"pageNumber": 0,
+"pageSize": 20,
+"totalElements": 156,
+"totalPages": 8,
+"last": false
+}
+GET - /api/v1/countries
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2026-01-20T23:27:25",
+"errorStatus": null,
+"countryList": [
+{
+"code": "AF",
+"name": "Авганистан",
+"tin": "AF001"
+},
+{
+"code": "AL",
+"name": "Албанија",
+"tin": "AL001"
+},
+...
+]
+}
+¶ Причини за Сторнирање
+Овој сервис овозможува добивање листа на причини за сторнирање.
+GET - /api/v1/void-reasons - Добиј листа на причини за сторнирање.
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2026-04-29T11:31:28",
+"errorStatus": null,
+"voidReasonList": [
+{
+"code": "S-1",
+"voidReason": "Погрешен купувач",
+"isActive": true,
+"validDateFrom": "2026-04-28 10:13:35",
+"validDateTo": null,
+"updated_on": "2026-04-28 08:13:35"
+},
+{
+"code": "S-2",
+"voidReason": "Поништување на договор",
+"isActive": true,
+"validDateFrom": "2026-04-28 10:13:35",
+"validDateTo": null,
+"updated_on": "2026-04-28 08:13:35"
+},
+{
+"code": "S-3",
+"voidReason": "Стоката е вратена во целост",
+"isActive": true,
+"validDateFrom": "2026-04-28 10:13:35",
+"validDateTo": null,
+"updated_on": "2026-04-28 08:13:35"
+},
+…
+]
+}
+¶ Причини за Корекција
+Овој сервис овозможува добивање листа на причини за корекција.
+GET - /api/v1/correction-reason - Добиј листа на причини за корекција.
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2026-04-29T11:31:28",
+"errorStatus": null,
+"correctionReasonList": [
+{
+"code": "C01",
+"correctionReason": "Грешка во цена",
+"isActive": true,
+"validDateFrom": "2026-08-20T08:02:41.455Z",
+"validDateTo": "2026-08-20T08:02:41.455Z",
+"updatedOn": "2026-08-20T08:02:41.455Z"
+},
+...
+]
+}
+GET - /api/v1/correction-reason/{date} - Добиј листа на причини за корекција.
+URL param:
+date // Датум на причина за корекција
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2026-04-29T11:31:28",
+"errorStatus": null,
+"correctionReasonList": [
+{
+"code": "C01",
+"correctionReason": "Грешка во цена",
+"isActive": true,
+"validDateFrom": "2026-08-20T08:02:41.455Z",
+"validDateTo": "2026-08-20T08:02:41.455Z",
+"updatedOn": "2026-08-20T08:02:41.455Z"
+}
+]
+}
+¶ Причини за Одбивање
+Овој сервис овозможува добивање листа на причини за одбивање.
+GET - /api/v1/reject-reason - Добиј листа на причини за одбивање.
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2025-11-19T13:59:03", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"rejectReasonList": [
+{
+"code": "O-1",
+"rejectReason": "Погрешно пресметан ДДВ (несоодветна даночна основа, ДДВ стапка, неправилен даночен индикатор и сл.)",
+"isActive": true,
+"validDateFrom": "2026-04-28 10:13:35",
+"validDateTo": null,
+"updatedOn": "2026-04-28 08:13:35"
+},
+{
+"code": "O-2",
+"rejectReason": "Грешка во нарачка (количина, цена, опис на промет и друго)",
+"isActive": true,
+"validDateFrom": "2026-04-28 10:13:35",
+"validDateTo": null,
+"updatedOn": "2026-04-28 08:13:35"
+},
+{
+"code": "O-3",
+"rejectReason": "Погрешни податоци за купувач (едб, назив, адреса и друго)",
+"isActive": true,
+"validDateFrom": "2026-04-28 10:13:35",
+"validDateTo": null,
+"updatedOn": "2026-04-28 08:13:35"
+},
+…
+}
+¶ Типови на Плаќање
+Овој сервис овозможува добивање листа на типови на плаќање.
+GET - /api/v1/payment-types
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2025-11-19T13:59:03", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"paymentTypeList": [
+{
+"code": "P10", // Краток код за типот на плаќање
+"description": "Плаќање во готово", // Опис на типот на плаќање
+"isActive": true, // Дали типот е активен
+"validDateFrom": "2025-12-25 09:35:18", // Почетен датум на валидност
+"validDateTo": null, // Краен датум на валидност (null ако е активен)
+"updated_on": "2026-02-10 10:35:13" // Датум и време на последно ажурирање
+},
+{
+"code": "P11",
+"description": "Плаќање со картичка",
+"isActive": true,
+"validDateFrom": "2025-12-25 09:35:18",
+"validDateTo": null,
+"updated_on": "2026-02-10 10:35:13"
+},
+...
+]
+}
+¶ Статус на Документи
+Овој сервис добивање на листа на можни статуси на документи.
+GET - /api/v1/document-statuses
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2026-04-29T11:37:28",
+"errorStatus": null,
+"statusList": [
+{
+"code": "00",
+"name": "Нацрт",
+"description": "Ова се е-Фактурите кои се креирани, меѓутоа не се финални и не се пратени кон примачот.",
+"updated_on": "2026-02-10 22:36:22"
+},
+{
+"code": "01",
+"name": "Испратена (Нова)",
+"description": "е-Фактура која е издадена од страна на Издавачот кон Примачот, потпишана и валидирана, снимена во системот",
+"updated_on": "2026-02-10 22:36:22"
+},
+{
+"code": "03",
+"name": "Прифатена",
+"description": "е-Фактура која е издадена од страна на Издавачот кон Примачот и е Прифатена од страна на Примачот",
+"updated_on": "2026-02-10 22:36:22"
+},
+…
+]
+}
+¶ Типови на Документи
+Овој сервис враќа листа на типови на документи.
+Се користи за добивање на правилата и карактеристиките на различни видови документи (фактури, книжни одобренија и сл.) во системот за е-фактури.
+GET - /api/v1/document-types
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2026-01-04T23:09:05", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"documentTypesList": [
+{
+"code": "100", // Код на типот на документ
+"name": "Фактура", // Назив на типот на документ
+"type": 1, // Категорија / тип на документ
+"needSignature": true, // Дали е потребен дигитален потпис
+"hasItems": true, // Дали документот содржи ставки
+"hasReference": false, // Дали документот има референтен документ
+"isReferenceMandatory": false, // Дали референтниот документ е задолжителен
+"isActive": true, // Дали типот на документ е активен
+"validDateFrom": "2025-11-12 10:20:20", // Почетен датум на валидност
+"validDateTo": null, // Краен датум на валидност (null ако е активен)
+"description": null, // Дополнителен опис (ако постои)
+"updatedOn": "2025-12-29 09:28:21" // Датум и време на последно ажурирање
+}
+]
+}
+¶ Типови на Документи и Даночни Индикатори
+Овој сервис е за добивање на листа на типови на документи и даночни индикатори.
+GET - /api/v1/doc-type-x-tax-indicator/{docTypeCode} - Добивање на листа на даночни индикатори по тип на документ
+URL param:
+docTypeCode // Код на тип на документ
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2026-04-29T11:39:25",
+"errorStatus": null,
+"docTypeXTaxIndicatorList": [
+{
+"docTypeId": 1,
+"taxIndicator": {
+"code": "DDV-G",
+"categoryCode": "DDV-G",
+"categoryName": "Не е ДДВ обврзник",
+"categoryDesc": "Промет на добра и услуги извршен од даночен обврзник кој не е регистриран за целите на ДДВ (мал претприемач). Даночни обврзници-резиденти во земјата кои не се обврзани за регистрација според член 51 став 3 од ЗДДВ не должат данок на додадена вредност за прометот на добра и услуги извршени од нив. Тие не се овластени одделно да искажуваат данок во фактурите или во други документи и немаат право на одбивка на претходни даноци. ",
+"note": "ДДВ не е пресметан согласно член 51 став 3 од ЗДДВ",
+"vatImpact": "NULA",
+"isActive": true,
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"updated_on": "2026-04-28 21:32:29",
+"taxGroupCode": "DDV-G"
+},
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"active": true,
+"docTypeCode": "100",
+"docTypeName": "Фактура",
+"taxIndicatorCode": "DDV-G"
+},
+{
+"docTypeId": 1,
+"taxIndicator": {
+"code": "DDV-A",
+"categoryCode": "DDV-A",
+"categoryName": "Стандардно оданочување со општа даночна стапка од 18%",
+"categoryDesc": "Промет на добра и услуги кој подлежи на oданочување по општа даночна стапка 18%",
+"note": "",
+"vatImpact": "STANDARD",
+"isActive": true,
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"updated_on": "2026-04-28 21:33:13",
+"taxGroupCode": "DDV-A"
+},
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"active": true,
+"docTypeCode": "100",
+"docTypeName": "Фактура",
+"taxIndicatorCode": "DDV-A"
+},
+…
+]
+}
+POST - /api/v1/doc-type-x-tax-indicator/list- Добивање на листа на типови на документи и даночни индикатори
+Request Body
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"page": 0,
+"size": 20,
+"sortBy": "id",
+"sortDirection": "ASC"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-04-29T11:45:36",
+"errorStatus": null,
+"content": [
+{
+"docTypeId": 1,
+"taxIndicator": {
+"code": "DDV-G",
+"categoryCode": "DDV-G",
+"categoryName": "Не е ДДВ обврзник",
+"categoryDesc": "Промет на добра и услуги извршен од даночен обврзник кој не е регистриран за целите на ДДВ (мал претприемач). Даночни обврзници-резиденти во земјата кои не се обврзани за регистрација според член 51 став 3 од ЗДДВ не должат данок на додадена вредност за прометот на добра и услуги извршени од нив. Тие не се овластени одделно да искажуваат данок во фактурите или во други документи и немаат право на одбивка на претходни даноци. ",
+"note": "ДДВ не е пресметан согласно член 51 став 3 од ЗДДВ",
+"vatImpact": "NULA",
+"isActive": true,
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"updated_on": "2026-04-28 21:32:29",
+"taxGroupCode": "DDV-G"
+},
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"active": true,
+"docTypeCode": "100",
+"docTypeName": "Фактура",
+"taxIndicatorCode": "DDV-G"
+},
+{
+"docTypeId": 1,
+"taxIndicator": {
+"code": "DDV-A",
+"categoryCode": "DDV-A",
+"categoryName": "Стандардно оданочување со општа даночна стапка од 18%",
+"categoryDesc": "Промет на добра и услуги кој подлежи на oданочување по општа даночна стапка 18%",
+"note": "",
+"vatImpact": "STANDARD",
+"isActive": true,
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"updated_on": "2026-04-28 21:33:13",
+"taxGroupCode": "DDV-A"
+},
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"active": true,
+"docTypeCode": "100",
+"docTypeName": "Фактура",
+"taxIndicatorCode": "DDV-A"
+},
+…
+]
+}
+¶ Типови на Референтни Документи
+Овој сервис овозможува добивање на листа типови на референтни документи.
+Се користи за идентификација на документи кои се поврзани со фактури или други записи во системот за е-фактура.
+GET - /api/v1/ref-document-types
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2026-01-04T23:11:33", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"refDocumentTypes": [
+{
+"code": "SYS", // Краток код на типот на документ
+"name": "Од систем", // Име на типот на документ
+"type": 0, // Тип (може да се користи за категорија или класификација)
+"isActive": true, // Дали типот е активен
+"validDateFrom": "2025-11-12 10:40:20", // Почетен датум на валидност
+"validDateTo": null, // Краен датум на валидност (null ако е активен)
+"refDocNumberDescription": "Единствен идентификациски број на поврзана фактура (E-Invoice Unique ID код)", // Опис за бројот на поврзани документи
+"dateDescription": "Датум на издавање на поврзана фактура", // Опис за датумот
+"description": "Испратница и повратница, образложение за истите, кантарска белешка *овде треба да се повика на ИД број на поврзан документ издаден преку системот за е-фактура", // Дополнителен описи за типот на документ
+"updated_on": "2025-12-24 07:52:42" // Датум и време на последно ажурирање
+},
+{
+"code": "JN",
+"name": "Документ за јавна набавка",
+"type": 1,
+"isActive": true,
+"validDateFrom": "2025-11-12 10:40:20",
+"validDateTo": null,
+"refDocNumberDescription": "Број на референтен документ за јавна набавка",
+"dateDescription": "Датум на референтен документ за јавна набавка",
+"description": "",
+"updated_on": "2025-12-30 09:14:54"
+},
+...
+]
+}
+¶ Даночни Групи
+Овој сервис овозможува добивање на активните даночни групи.
+Ова е листа од активните даночни стапки кои се применуваат при продажба на производи или услуги.
+GET - /api/v1/tax-groups
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2026-01-04T22:58:20", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"taxGroupList": [
+{
+"code": "DDV-A", // Краток код за даночната група
+"name": "ДДВ 18%", // Име на даночната група
+"percent": 18, // Процент на данок
+"description": "Стандардна стапка – 18%", // Краток опис на стапката
+"isActive": true, // Дали групата е активна
+"validDateFrom": "2025-01-01 10:26:51", // Почетен датум за валидност на даночната група
+"validDateTo": null // Краен датум за валидност
+},
+...
+]
+}
+¶ Даночни обврзници / Компании
+Овој сервис овозможува добивање на на информации за компаниите, како даночен број, назив, адреса и сл.
+Податоците се добиваат според даночен број
+GET - /api/v1/companies/{tax_number}
+URL variable:
+tax_number - уникатен даночен број доделен на компанијата (Пр:4001235555678)
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2025-11-19T09:28:40", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"company": {
+"taxNumber": "4001235555678", // Даночен број на компанијата
+"vatNumber": null, // ДДВ број, ако е дефиниран
+"registrationNumber": "4667788", // Регистрациски број на компанијата
+"name": "Тест компанија 2", // Име на компанијата
+"address": { // Адреса на компанијата
+"street": "ул. Тест адреса за тест компанија 2", // Улица
+"number": "245", // Број на улица
+"city": "Скопје", // Град
+"zip": "1000" // Поштенски број
+},
+"countryId": 132, // Идентификатор на земјата (може да е null)
+"changeDate": null,
+"municipality": null,
+"golemina": "0",
+"countryCode": "MK"
+}
+}
+¶ Подружници
+Овој сервис овозможува добивање листа на подружници на компании.
+Податоците за подружниците се враќаат според даночниот број на компанијата
+GET - /api/v1/subsidiary/{tax_number}
+URL variable:
+tax_number - уникатен даночен број доделен на компанијата (Пр:4001235555678)
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2025-11-19T09:28:40", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"subsidiary": [
+{
+"taxPayerId": 10, // Идентификатор на даночниот обврзник (компанијата)
+"taxNumber": "4001235555678", // Даночен број на подружницата
+"subsidiaryCode": "25000", // Код на подружницата
+"subsidiaryName": "Тест компанија", // Име на подружницата
+"subsidiaryStreet": "Партизански одреди", // Улица на подружницата
+"subsidiaryNumber": "12", // Број на улица
+"subsidiaryCity": "Скопје", // Град
+"countryId": 132, // Идентификатор на земјата
+"zip": "1000", // Поштенски број
+"taxpayerSubsidiaryCode": "10", // Код на подружницата за даночниот обврзник
+"taxpayerSubsidiaryType": "0", // Тип на подружница за даночниот обврзник
+"countryCode": "MK"
+}
+]
+}
+¶ Даночни Индикатори
+Овој сервис овозможува добивање на листа на даночни индикатори.
+Се користи за класификација на различни видови на даночни трансакции и нивното влијание врз ДДВ.
+GET - /api/v1/tax-indicators
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true, // Дали барањето било успешно
+"createdDate": "2026-01-04T23:25:32", // Датум и време на креирање на одговорот
+"errorStatus": null, // Статус на грешка, ако има
+"taxIndicators": [
+{
+"code": "DDV-G", // Код на даночниот индикатор
+"categoryCode": "DDV-G", // Код на категорија на даночниот индикатор
+"categoryName": "Не е ДДВ обврзник", // Име на категоријата
+"categoryDesc": "Промет на добра и услуги извршен од даночен обврзник кој не е регистриран за целите на ДДВ (мал претприемач). Даночни обврзници-резиденти во земјата кои не се обврзани за регистрација според член 51 став 3 од ЗДДВ не должат данок на додадена вредност за прометот на добра и услуги извршени од нив. Тие не се овластени одделно да искажуваат данок во фактурите или во други документи и немаат право на одбивка на претходни даноци. ", // Опис на категоријата
+"note": "ДДВ не е пресметан согласно член 51 став 3 од ЗДДВ", // Дополнителна белешка
+"vatImpact": "NULA",
+"isActive": true, // Дали индикаторот е активен
+"validDateFrom": "2025-12-01 00:00:00", // Почетен датум на валидност
+"validDateTo": null, // Краен датум на валидност (null ако е активен)
+"updated_on": "2025-12-30 09:06:58" // Датум и време на последно ажурирање
+"taxGroupCode": "DDV-G"
+},
+{
+"code": "DDV-A",
+"categoryCode": "DDV-A",
+"categoryName": "Стандардно оданочување со општа даночна стапка од 18%",
+"categoryDesc": "Промет на добра и услуги кој подлежи на oданочување по општа даночна стапка 18%",
+"note": "",
+"vatImpact": "STANDARD",
+"isActive": true,
+"validDateFrom": "2026-04-07 00:00:00",
+"validDateTo": null,
+"updated_on": "2026-04-28 21:33:13",
+"taxGroupCode": "DDV-A"
+},
+...
+]
+}
+¶ Влезни Даночни Индикатори
+Овој сервис овозможува добивање на листа на влезни даночни индикатори.
+GET - /api/v1/purchase-tax-indicators
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"errorStatus": null,
+"purchaseTaxIndicators": [
+{
+"code": "DDV-22",
+"name": "Влезен данок од промет од земјата",
+"description": "износ на претходен данок за одбивка за влезен промет од земјата со право на одобивка согласно членовите 33, 34 и 35 од ЗДДВ",
+"vatImpact": "Не се пресметува ДДВ",
+"isActive": true,
+"validDateFrom": "2026-07-01T09:00:52.951Z",
+"validDateTo": "2026-07-01T09:00:52.951Z",
+"updated_on": "2026-07-01T09:00:52.951Z"
+}
+]
+}
+GET - /api/v1/purchase-tax-indicators/{date}
+URL param:
+date // Датум на влезен даночен индикатор
+Request Body
+Нема потреба од тело на барање.
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"errorStatus": null,
+"purchaseTaxIndicators": [
+{
+"code": "DDV-22",
+"name": "Влезен данок од промет од земјата",
+"description": "износ на претходен данок за одбивка за влезен промет од земјата со право на одобивка согласно членовите 33, 34 и 35 од ЗДДВ",
+"vatImpact": "Не се пресметува ДДВ",
+"isActive": true,
+"validDateFrom": "2026-07-01T09:00:52.951Z",
+"validDateTo": "2026-07-01T09:00:52.951Z",
+"updated_on": "2026-07-01T09:00:52.951Z"
+}
+]
+}
+¶ Управување со Документи
+Овој сервис овозможува праќање и обработка на документи.
+¶ Праќање на документ
+Се користи за испраќање на дигитално потпишани продажни фактури кон системот за е-фактури и автоматско генерирање на EUID и QR податоци.
+URL за праќање документи:
+https://efakturatest.ujp.gov.mk/JSONReceiver/api/v1/sales-invoices/send
+POST - /api/v1/sales-invoices/send
+Request Headers:
+- `X-SERIAL-NUMBER` // Сериски број на дигиталниот сертификат
+- `X-EUJP-ID` // Единствен идентификатор на корисникот (потписник) EUJP-ID
+- `X-EDB` // Даночен број на компанијата која е вршител на промет
+- `X-DOC-TYPE-CODE` //Код на типот на документ (пр. 100)
+Request Body:
+{
+"requestTimestamp": "2025-11-19T12:00:00", // Временски печат на барањето (треба да биде 5 минути од сегашното време)
+"jws": "string" // JWS со комплетна содржина добиен од дигитално потпишаниот документ
+}
+Response:
+{
+"euid": "019b8d43-7840-7433-b358-08891b53605c", // Единствен идентификатор на е-фактурата (EUID)
+"message": "Фактура успешно зачувана", //Порака
+"qr_link": "https://efakturatest.ujp.gov.mk/euid/019b8d43-7840-7433-b358-08891b53605c", // Линк за проверка на фактурата кој корисниците ќе треба да го прикажат како QR Code на документот.
+"status": 200, // Дали барањето било успешно
+"e_invoice_user": false,
+"timestamp": "2026-01-05T08:26:07.846Z" // Датум и време на прием
+}
+¶ Сторно документ
+Овој ист сервис се користи и за праќање на сторно документи. Само во header.docStorno се праќа 1 и количните и тоталите се негативни. Се праќа со причина за сторнирање.
+Пример има тука
+¶ Корекција на документ
+Овој ист сервис се користи и за праќање на корекција на документ. Се праќа стандардно како нов документ со референца на документот кој се корегира. Само во header.docStorno се праќа 2. Новиот документ го заменува претходниот, значи треба да ги има ставките кои остануваат испорачани. Се праќа со причина за корекција.
+¶ Прифаќање или одбивање на влезна фактура
+POST - /api/v1/documents/purchase-invoice/accept-reject - прифаќање или одбивање на влезна фактура
+Request Headers:
+X-SERIAL-NUMBER
+X-EUJP-ID
+X-EDB
+Request Body ACCEPT (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"euid": "018afa8c-b364-7a58-b54d-901904a094b3",
+"isAccepted": true,
+"rejectReasonCode": null,
+"comment": null
+}
+Request Body REJECT (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"euid": "018afa8c-b364-7a58-b54d-901904a094b3",
+"isAccepted": false,
+"rejectReasonCode": "O-2",
+"comment": "Wrong price on fruit."
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00"
+}
+¶ Генерирање на PDF (Base64) за излезна фактура
+POST /api/v1/documents/sales-invoice/pdf – Генерирање на PDF (Base64) за излезена фактура
+Привилегија: DP (Превземање на ПДФ)
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"euid": "string"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"pdfBase64": "string"
+}
+¶ Листа на EUID од излезни фактури во одреден период
+POST /api/v1/documents/sales-invoice/ids - листа на EUID од излезни фактури во одреден период
+Request Headers:
+X-SERIAL-NUMBER
+X-EUJP-ID
+X-EDB
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"dateFrom": "2025-12-19",
+"dateTo": "2025-12-19"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-11-24T13:48:36",
+"errorStatus": null,
+"euids": [
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3"
+]
+}
+¶ Статус историја на документ
+POST /api/v1/documents/sales-invoice/status - Добиј ја статус историјата на документ
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"euid": "string",
+"dateFrom": "2025-12-25T13:07:30"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"statusHistory": [
+{
+"id": 9007199254740991,
+"euid": "018afa8c-b364-7a58-b54d-901904a094b3",
+"oldStatus": {
+"code": "01",
+"name": "Испратена (Нова)"
+},
+"newStatus": {
+"code": "07",
+"name": "Сторнирана"
+},
+"timestamp": "2024-07-20T16:25:39",
+"userId": 1,
+"comment": "string",
+"version": 1073741824,
+"lastModified": "2024-07-20T16:25:39",
+"cancelComment": "Грешка во износот",
+"voidComment": "Грешка во износот"
+}
+]
+}
+¶ Тековен статус на излезна фактура
+POST /api/v1/documents/sales-invoice/current-status - Добиј моментален статус на излезна фактура
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"euid": "string"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"docStatus": {
+"euid": "019df254-acd6-723c-a1a9-09516b85af93",
+"statusCode": "03",
+"statusName": "Прифатена",
+"docNumber": "e6e70a12-fdbe-4542-8",
+"docDate": "2026-05-20",
+"docDeliveryDate": "2026-05-20",
+"docNetAmount": 1500,
+"docVatAmount": 270,
+"docGrossAmountR": 1770,
+"docAvansAmount": 100,
+"docFinalAmount": 1670,
+"sellerTin": "4030995135699",
+"buyerTin": "4030995135699",
+"senderTin": "",
+"receiverTin": ""
+}
+}
+¶ Листа на променети излезни фактури
+POST /api/v1/documents/sales-invoice/changes - листа на променети излезни фактури на одреден датум (тука се мисли на промените на статусите, сторнирана, прифатена, одобрена...)
+Request Headers:
+X-SERIAL-NUMBER
+X-EUJP-ID
+X-EDB
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"date": "2025-12-25T13:01:43"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-06-19T09:32:42",
+"errorStatus": null,
+"statusHistory": [
+{
+"euid": "019d8b15-5485-70c4-afee-c2e08c4c7d59",
+"oldStatus": {
+"code": "01",
+"name": "Испратена (Нова)"
+},
+"newStatus": {
+"code": "07",
+"name": "Сторнирана"
+},
+"timestamp": "2026-04-14T10:22:04",
+"comment": null,
+"cancelComment": null,
+"voidComment": "test",
+"voidReasonCode": "S-2",
+"voidReason": "Грешка во нарачка (количина, цена и друго)",
+"rejectReasonCode": null,
+"rejectReason": null
+}
+]
+}
+¶ Статуси на излезни фактури во одреден период
+POST - /api/v1/documents/sales-invoice/invoices-status
+Request Headers:
+`X-EUJP-ID` // Единствен идентификатор на компанијата EUJP-ID
+`X-EDB` // Даночен број на компанијата
+X-SERIAL-NUMBER // Сериски број на сертификат со кој се потпишува
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"dateFrom": "2025-12-19",
+"dateTo": "2025-12-19"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-05-26T09:42:15",
+"errorStatus": null,
+"invoices": [
+{
+"euid": "019df254-acd6-723c-a1a9-09516b85af93",
+"statusCode": "07",
+"statusName": "Сторнирана",
+"docNumber": "e6e70a12-fdbe-4542-8",
+"docDate": "2026-05-04",
+"docDeliveryDate": "2026-05-25",
+"docNetAmount": 1500,
+"docVatAmount": 270,
+"docGrossAmountR": 1770,
+"docAvansAmount": 100,
+"docFinalAmount": 1670,
+"sellerTin": "4030995135699",
+"buyerTin": "4030995135699",
+"senderTin": "",
+"receiverTin": ""
+},
+{
+"euid": "019df256-880a-701c-86ef-7434fe8a2c2f",
+"statusCode": "07",
+"statusName": "Сторнирана",
+"docNumber": "ded582d1-8e64-4332-8",
+"docDate": "2026-05-04",
+"docDeliveryDate": "2026-05-25",
+"docNetAmount": 1500,
+"docVatAmount": 270,
+"docGrossAmountR": 1770,
+"docAvansAmount": 100,
+"docFinalAmount": 1670,
+"sellerTin": "4030995135699",
+"buyerTin": "4030995135699",
+"senderTin": "",
+"receiverTin": ""
+}
+]
+}
+¶ Листа на EUID од влезни фактури
+POST - /api/v1/documents/purchase-invoice/ids - листа на EUID од влезни фактури во одреден период
+Request Headers:
+X-SERIAL-NUMBER
+X-EUJP-ID
+X-EDB
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"dateFrom": "2025-12-19",
+"dateTo": "2025-12-19"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-11-24T13:48:36",
+"errorStatus": null,
+"euids": [
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3",
+"018afa8c-b364-7a58-b54d-901904a094b3"
+]
+}
+¶ Листа на статуси на влезни фактури во одреден период
+POST - /api/v1/documents/purchase-invoice/invoices-status
+Request Headers:
+`X-EUJP-ID` // Единствен идентификатор на компанијата EUJP-ID
+`X-EDB` // Даночен број на компанијата
+X-SERIAL-NUMBER // Сериски број на сертификат со кој се потпишува
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"dateFrom": "2025-12-19",
+"dateTo": "2025-12-19"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-05-26T09:42:15",
+"errorStatus": null,
+"invoices": [
+{
+"euid": "019df254-acd6-723c-a1a9-09516b85af93",
+"statusCode": "07",
+"statusName": "Сторнирана",
+"docNumber": "e6e70a12-fdbe-4542-8",
+"docDate": "2026-05-04",
+"docDeliveryDate": "2026-05-25",
+"docNetAmount": 1500,
+"docVatAmount": 270,
+"docGrossAmountR": 1770,
+"docAvansAmount": 100,
+"docFinalAmount": 1670,
+"sellerTin": "4030995135699",
+"buyerTin": "4030995135699",
+"senderTin": "",
+"receiverTin": ""
+},
+{
+"euid": "019df256-880a-701c-86ef-7434fe8a2c2f",
+"statusCode": "07",
+"statusName": "Сторнирана",
+"docNumber": "ded582d1-8e64-4332-8",
+"docDate": "2026-05-04",
+"docDeliveryDate": "2026-05-25",
+"docNetAmount": 1500,
+"docVatAmount": 270,
+"docGrossAmountR": 1770,
+"docAvansAmount": 100,
+"docFinalAmount": 1670,
+"sellerTin": "4030995135699",
+"buyerTin": "4030995135699",
+"senderTin": "",
+"receiverTin": ""
+}
+]
+}
+¶ Тековен статус на влезна фактура
+POST - /api/v1/documents/purchase-invoice/current-status - Добиј моментален статус на влезна фактура
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"euid" : "018afa8c-b364-7a58-b54d-901904a094b3"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-05-26T09:42:15",
+"errorStatus": null,
+"docStatus": {
+"euid": "019df254-acd6-723c-a1a9-09516b85af93",
+"statusCode": "03",
+"statusName": "Прифатена",
+"docNumber": "e6e70a12-fdbe-4542-8",
+"docDate": "2026-05-20",
+"docDeliveryDate": "2026-05-20",
+"docNetAmount": 1500,
+"docVatAmount": 270,
+"docGrossAmountR": 1770,
+"docAvansAmount": 0,
+"docFinalAmount": 1770,
+"sellerTin": "4030995135699",
+"buyerTin": "4030995135699",
+"senderTin": "",
+"receiverTin": ""
+}
+}
+¶ Генерирање на PDF за влезна фактура
+POST - /api/v1/documents/purchase-invoice/pdf – Генерирање на PDF (Base64) за влезна фактура
+Привилегија: DP (Превземање на ПДФ)
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"euid": "string"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"pdfBase64": "string"
+}
+¶ Листа на сите промени на влезни фактури
+POST - /api/v1/documents/purchase-invoice/changes – Добиј листа на сите промени на влезни фактури за одреден ден
+Request Headers:
+X-SERIAL-NUMBER
+X-EUJP-ID
+X-EDB
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2025-11-19T12:00:00",
+"date": "2025-12-25"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-06-19T09:32:42",
+"errorStatus": null,
+"statusHistory": [
+{
+"euid": "019d71d6-205e-713a-a089-e1f845d19a1b",
+"oldStatus": {
+"code": "01",
+"name": "Испратена (Нова)"
+},
+"newStatus": {
+"code": "04",
+"name": "Автоматски прифатена"
+},
+"timestamp": "2026-04-14T22:00:00",
+"comment": "Document auto accept after expiration date",
+"cancelComment": null,
+"voidComment": null,
+"voidReasonCode": null,
+"voidReason": null,
+"rejectReasonCode": null,
+"rejectReason": null
+}
+]
+}
+¶ ДДВ тотали за Влезни документи
+POST - /api/v1/documents/purchase-vat-totals – Ги зачувува вкупните износи на ДДВ при набавка, групирани според стапката на ДДВ и даночниот индикатор за ДДВ при набавка.
+Request Headers:
+X-SERIAL-NUMBER
+X-EUJP-ID
+X-EDB
+{
+"requestTimestamp": "2026-07-13T09:30:00Z",
+"euid": "5b0d2f0d-56f4-4f90-8fd3-4f74c5f8d0d",
+"purchaseVatTotals": [
+{
+"purchaseVatTaxIndicator": "FULL",
+"vatCode": "A",
+"vatPercent": 18,
+"vatTaxableAmount": 1000,
+"vatAmount": 180,
+"vatTotalAmount": 1180
+},
+{
+"purchaseVatTaxIndicator": "PARTIAL",
+"vatCode": "A",
+"vatPercent": 5,
+"vatTaxableAmount": 200,
+"vatAmount": 10,
+"vatTotalAmount": 210
+}
+]
+}
+Response:
+{
+"requestTimestamp": "2026-07-13T09:30:00Z",
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"errorStatus": null,
+"euid": "5b0d2f0d-56f4-4f90-8fd3-4f74c5f8d0d",
+"purchaseVatTotals": [
+{
+"purchaseVatTaxIndicator": "FULL",
+"vatCode": "A",
+"vatPercent": 18,
+"vatTaxableAmount": 1000,
+"vatAmount": 180,
+"vatTotalAmount": 1180
+},
+{
+"purchaseVatTaxIndicator": "PARTIAL",
+"vatCode": "A",
+"vatPercent": 5,
+"vatTaxableAmount": 200,
+"vatAmount": 10,
+"vatTotalAmount": 210
+}
+]
+}
+¶ JSON за излезна фактура
+POST - /api/v1/documents/sales-invoice/payload – Добиј JSON за излезна фактура по euid
+Привилегија: RD (Преземи json за документ)
+Request Headers:
+X-EUJP-ID
+X-EDB
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"euid": "018afa8c-b364-7a58-b54d-901904a094b3"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"payload": "string"
+}
+¶ JSON за излезни фактури по листа на euid
+POST - /api/v1/documents/sales-invoice/payload/list – Добиј JSON за излезни фактури по листа на euid
+Привилегија: RD (Преземи json за документ)
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"euids": ["018afa8c-b364-7a58-b54d-901904a094b3"]
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"invoices": [
+{
+"euid": "string",
+"payload": "string"
+}
+]
+}
+¶ JSON за излезни фактури во одреден временски опсег
+POST - /api/v1/documents/sales-invoice/payload/date-range – Добиј JSON за излезни фактури во одреден временски опсег
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"dateFrom": "2026-05-01",
+"dateTo":"2026-06-01"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"invoices": [
+{
+"euid": "string",
+"payload": "string"
+}
+]
+}
+¶ JSON за влезна фактура
+POST - /api/v1/documents/purchase-invoice/payload – Добиј JSON за влезна фактура по euid
+Привилегија: RD (Преземи json за документ)
+Request Headers:
+X-EUJP-ID
+X-EDB
+X-SERIAL-NUMBER
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"euid": "018afa8c-b364-7a58-b54d-901904a094b3"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"payload": "string"
+}
+¶ JSON листа за влезни фактури по листа на euid
+POST - /api/v1/documents/purchase-invoice/payload/list – Добиј JSON листа за влезни фактури по листа на euid
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"euids": ["018afa8c-b364-7a58-b54d-901904a094b3"]
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"invoices": [
+{
+"euid": "string",
+"payload": "string"
+}
+]
+}
+¶ JSON листа за влезни фактури по временски опсег
+POST - /api/v1/documents/purchase-invoice/payload/date-range – Добиј JSON листа за влезни фактури по временски опсег
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"dateFrom": "2026-05-01",
+"dateTo":"2026-06-01"
+}
+Response:
+{
+"success": true,
+"createdDate": "2026-05-26T09:42:15",
+"errorStatus": null,
+"invoices": [
+{
+"euid": "string",
+"payload": "string"
+},
+{
+"euid": "string",
+"payload": "string"
+}
+]
+}
+¶ Листа на статуси за излезни фактури во одреден временски опсег
+POST - /api/v1/documents/purchase-invoice/invoices-status – Добиј листа на статуси за излезни фактури во одреден временски опсег
+Request Body (signed as JWS):
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"dateFrom": "2026-05-01",
+"dateTo":"2026-06-01"
+}
+Response:
+{
+"success": true,
+"createdDate": "2025-10-21T07:00:00",
+"invoices": [
+{
+"euid": "019df254-acd6-723c-a1a9-09516b85af93",
+"statusCode": "03",
+"statusName": "Прифатена",
+"docNumber": "e6e70a12-fdbe-4542-8",
+"docDate": "2026-05-20",
+"docDeliveryDate": "2026-05-20",
+"docNetAmount": 1500,
+"docVatAmount": 270,
+"docGrossAmountR": 1770,
+"docAvansAmount": 0,
+"docFinalAmount": 1770,
+"sellerTin": "4030995135699",
+"buyerTin": "4030995135699",
+"senderTin": "",
+"receiverTin": ""
+}
+]
+}
+¶ Електронска форма (ASiC container)
+POST - /api/v1/documents/invoice – Зачувај фактура во електронска форма (ASiC container)
+Привилегија: DA (Преземање на ASiC container)
+Request Headers:
+X-EUJP-ID
+X-EDB
+X-SERIAL-NUMBER
+Request Body:
+{
+"requestTimestamp": "2026-01-05T12:00:00",
+"euid": "018afa8c-b364-7a58-b54d-901904a094b3"
+}
+Response:
+asics file

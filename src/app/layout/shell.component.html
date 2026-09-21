@@ -1,0 +1,176 @@
+<div class="shell" [class.shell--handset]="isHandset()">
+  @if (!isHandset()) {
+    <nav class="rail" aria-label="Главна навигација">
+      <a class="rail__brand" routerLink="/fakturi" aria-label="Почетна">
+        <mat-icon>receipt_long</mat-icon>
+      </a>
+
+      @for (link of nav; track link.path) {
+        <a
+          class="rail__item"
+          [routerLink]="link.path"
+          routerLinkActive="rail__item--active"
+          [matTooltip]="link.label"
+          matTooltipPosition="right"
+        >
+          <mat-icon>{{ link.icon }}</mat-icon>
+          <span class="rail__label">{{ link.label }}</span>
+        </a>
+      }
+
+      <div class="grow"></div>
+
+      @if (isAdmin()) {
+        <a
+          class="rail__item"
+          routerLink="/admin"
+          routerLinkActive="rail__item--active"
+          matTooltip="Претплати"
+          matTooltipPosition="right"
+        >
+          <mat-icon>admin_panel_settings</mat-icon>
+          <span class="rail__label">Претплати</span>
+        </a>
+      }
+
+      <button
+        type="button"
+        class="rail__item rail__avatar"
+        [matMenuTriggerFor]="accountMenu"
+        [matTooltip]="user()?.email ?? 'Сметка'"
+        matTooltipPosition="right"
+        aria-label="Сметка"
+      >
+        <span class="avatar">{{ initials() }}</span>
+      </button>
+    </nav>
+  }
+
+  <div class="main">
+    <mat-toolbar class="topbar no-print">
+      <button
+        type="button"
+        class="company-switch"
+        [matMenuTriggerFor]="companyMenu"
+        [disabled]="companies.companies().length < 1"
+      >
+        <span class="company-switch__name">{{
+          companies.activeCompany()?.name || 'Изберете фирма'
+        }}</span>
+        <mat-icon class="company-switch__caret">expand_more</mat-icon>
+      </button>
+
+      <span class="grow"></span>
+
+      @if (companies.canIssue()) {
+        <a mat-flat-button routerLink="/fakturi/nova" class="new-invoice">
+          <mat-icon>add</mat-icon>
+          <span class="new-invoice__label">Нова фактура</span>
+          <span class="new-invoice__label--short">Нова</span>
+        </a>
+      } @else {
+        <button
+          mat-flat-button
+          type="button"
+          class="new-invoice"
+          disabled
+          matTooltip="Претплатата истече — обновете ја за да создавате нови фактури"
+        >
+          <mat-icon>add</mat-icon>
+          <span class="new-invoice__label">Нова фактура</span>
+          <span class="new-invoice__label--short">Нова</span>
+        </button>
+      }
+
+      @if (isHandset()) {
+        <button
+          type="button"
+          mat-icon-button
+          [matMenuTriggerFor]="accountMenu"
+          aria-label="Сметка"
+        >
+          <span class="avatar avatar--sm">{{ initials() }}</span>
+        </button>
+      }
+    </mat-toolbar>
+
+    @if (showSubscriptionBanner()) {
+      <div
+        class="sub-banner no-print"
+        [class.sub-banner--expired]="subscriptionDaysLeft() < 0"
+        role="status"
+      >
+        <mat-icon>{{ subscriptionDaysLeft() < 0 ? 'lock_clock' : 'schedule' }}</mat-icon>
+        <span>{{ subscriptionMessage() }}</span>
+        <button type="button" class="sub-banner__cta" (click)="openRenew()">
+          Обнови претплата
+        </button>
+      </div>
+    }
+
+    <main class="content">
+      <router-outlet />
+    </main>
+
+    @if (isHandset()) {
+      <nav class="tabbar no-print" aria-label="Главна навигација">
+        @for (link of nav; track link.path) {
+          <a
+            class="tabbar__item"
+            [routerLink]="link.path"
+            routerLinkActive="tabbar__item--active"
+          >
+            <mat-icon>{{ link.icon }}</mat-icon>
+            <span>{{ link.label }}</span>
+          </a>
+        }
+      </nav>
+    }
+  </div>
+</div>
+
+<mat-menu #companyMenu="matMenu">
+  @for (company of companies.companies(); track company.id) {
+    <button mat-menu-item type="button" (click)="switchCompany(company.id)">
+      @if (company.id === companies.activeCompanyId()) {
+        <mat-icon>check</mat-icon>
+      } @else {
+        <mat-icon>business</mat-icon>
+      }
+      <span>{{ company.name }}</span>
+    </button>
+  }
+  <mat-divider />
+  <a mat-menu-item routerLink="/registracija" [queryParams]="{ nova: 1 }">
+    <mat-icon>add_business</mat-icon>
+    <span>Нова фирма</span>
+  </a>
+  <a mat-menu-item routerLink="/postavki">
+    <mat-icon>settings</mat-icon>
+    <span>Поставки на фирма</span>
+  </a>
+</mat-menu>
+
+<mat-menu #accountMenu="matMenu">
+  <div class="account-head" mat-menu-item disabled>
+    <div>
+      <div class="account-head__name">{{ user()?.displayName || 'Корисник' }}</div>
+      <div class="account-head__email">{{ user()?.email }}</div>
+    </div>
+  </div>
+  <mat-divider />
+  <a mat-menu-item routerLink="/postavki">
+    <mat-icon>tune</mat-icon>
+    <span>Поставки</span>
+  </a>
+  @if (isAdmin()) {
+    <a mat-menu-item routerLink="/admin">
+      <mat-icon>admin_panel_settings</mat-icon>
+      <span>Претплати</span>
+    </a>
+  }
+  <button mat-menu-item type="button" (click)="signOut()">
+    <mat-icon>logout</mat-icon>
+    <span>Одјава</span>
+  </button>
+</mat-menu>

@@ -1,0 +1,372 @@
+<div class="page">
+  <header class="page__head">
+    <h1>Поставки</h1>
+    <p class="page__sub">{{ company()?.name }}</p>
+  </header>
+
+  <mat-accordion multi>
+    <!-- subscription ------------------------------------------------------ -->
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title><mat-icon>card_membership</mat-icon> Претплата</mat-panel-title>
+        <mat-panel-description>{{ subscriptionSummary() }}</mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <p class="note">
+        <mat-icon>info</mat-icon>
+        <span>
+          Претплатата се плаќа по фактура, преку банка. Постојните фактури секогаш остануваат
+          достапни за преглед, печатење и извоз — и по истекот. Престанува само создавањето на
+          нови фактури.
+        </span>
+      </p>
+
+      <dl class="kv">
+        <dt>Статус</dt>
+        <dd>{{ subscriptionLabel() }}</dd>
+        <dt>Важи до</dt>
+        <dd>
+          @if (subscription()?.paidUntil; as until) {
+            {{ until | mkDate }}
+          } @else {
+            —
+          }
+        </dd>
+        <dt>Издадени фактури</dt>
+        <dd>{{ company()?.stats?.issuedCount ?? 0 }}</dd>
+      </dl>
+
+      <div class="actions">
+        <button mat-flat-button type="button" (click)="openRenew()">
+          <mat-icon>card_membership</mat-icon>
+          Обнови претплата
+        </button>
+      </div>
+
+      <p class="env">
+        Ваш кориснички ID: <code class="uid">{{ userId() }}</code>
+      </p>
+    </mat-expansion-panel>
+
+    <!-- company ---------------------------------------------------------- -->
+    <mat-expansion-panel expanded>
+      <mat-expansion-panel-header>
+        <mat-panel-title><mat-icon>business</mat-icon> Податоци за фирмата</mat-panel-title>
+        <mat-panel-description>Се печатат на секоја фактура и се праќаат до УЈП</mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <form [formGroup]="form" class="grid">
+        <mat-form-field class="span-2">
+          <mat-label>Назив</mat-label>
+          <input matInput formControlName="name" />
+          @if (form.controls.name.touched && form.controls.name.invalid) {
+            <mat-error>Внесете назив (до 80 знаци).</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>ЕДБ</mat-label>
+          <input matInput formControlName="taxNumber" inputmode="numeric" maxlength="13" />
+          @if (form.controls.taxNumber.touched && form.controls.taxNumber.invalid) {
+            <mat-error>13 цифри.</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>ЕМБС</mat-label>
+          <input matInput formControlName="registrationNumber" />
+        </mat-form-field>
+
+        <div class="span-2">
+          <mat-checkbox formControlName="isVatRegistered">Регистрирана за ДДВ</mat-checkbox>
+        </div>
+
+        @if (form.controls.isVatRegistered.value) {
+          <mat-form-field class="span-2">
+            <mat-label>ДДВ број</mat-label>
+            <input matInput formControlName="vatNumber" />
+            <mat-hint>УЈП го очекува со кирилски префикс МК, на пр. МК4030995135699.</mat-hint>
+          </mat-form-field>
+        }
+
+        <mat-form-field class="span-2">
+          <mat-label>Улица</mat-label>
+          <input matInput formControlName="streetAddress" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Број</mat-label>
+          <input matInput formControlName="streetNumber" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Пошт. број</mat-label>
+          <input matInput formControlName="postalCode" inputmode="numeric" maxlength="4" />
+        </mat-form-field>
+
+        <mat-form-field class="span-2">
+          <mat-label>Град</mat-label>
+          <input matInput formControlName="city" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Е-пошта</mat-label>
+          <input matInput type="email" formControlName="email" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Телефон</mat-label>
+          <input matInput formControlName="phone" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Банка</mat-label>
+          <input matInput formControlName="bankName" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Трансакциска сметка</mat-label>
+          <input matInput formControlName="accountNumber" />
+        </mat-form-field>
+      </form>
+
+      <div class="actions">
+        <button mat-flat-button type="button" (click)="saveCompany()" [disabled]="saving()">
+          Зачувај
+        </button>
+      </div>
+    </mat-expansion-panel>
+
+    <!-- numbering -------------------------------------------------------- -->
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title><mat-icon>tag</mat-icon> Нумерација</mat-panel-title>
+        <mat-panel-description>Следна фактура: {{ numberPreview() }}</mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="preview">
+        <span class="preview__label">Следната фактура ќе го добие бројот</span>
+        <strong class="preview__value tabular">{{ numberPreview() }}</strong>
+      </div>
+
+      <div class="presets">
+        @for (preset of presets; track preset.pattern) {
+          <button
+            type="button"
+            class="chip"
+            [class.chip--active]="numberingForm.controls.pattern.value === preset.pattern"
+            (click)="applyPreset(preset.pattern)"
+          >
+            {{ preset.label }}
+          </button>
+        }
+      </div>
+
+      <form [formGroup]="numberingForm" class="grid">
+        <mat-form-field>
+          <mat-label>Формат</mat-label>
+          <input matInput formControlName="pattern" />
+          <mat-hint>&#123;SEQ&#125; &#123;YYYY&#125; &#123;YY&#125; &#123;MM&#125; &#123;PREFIX&#125;</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Префикс</mat-label>
+          <input matInput formControlName="prefix" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Водечки нули</mat-label>
+          <input matInput type="number" formControlName="padding" min="0" max="10" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Следен реден број</mat-label>
+          <input matInput type="number" formControlName="nextSeq" min="1" />
+        </mat-form-field>
+
+        <mat-form-field class="span-2">
+          <mat-label>Ресетирање на бројачот</mat-label>
+          <mat-select formControlName="reset">
+            <mat-option value="yearly">Секоја година</mat-option>
+            <mat-option value="monthly">Секој месец</mat-option>
+            <mat-option value="never">Никогаш</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </form>
+
+      <p class="note">
+        <mat-icon>info</mat-icon>
+        Бројот се доделува дури при издавање, не при креирање нацрт — така во низата нема
+        празнини, што е прво на што внимава ревизија.
+      </p>
+
+      <div class="actions">
+        <button mat-flat-button type="button" (click)="saveNumbering()" [disabled]="saving()">
+          Зачувај
+        </button>
+      </div>
+    </mat-expansion-panel>
+
+    <!-- defaults --------------------------------------------------------- -->
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title><mat-icon>tune</mat-icon> Стандардни вредности</mat-panel-title>
+        <mat-panel-description>Што се пополнува само на нова фактура</mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <form [formGroup]="defaultsForm" class="grid">
+        <mat-form-field>
+          <mat-label>Рок на плаќање (дена)</mat-label>
+          <input matInput type="number" formControlName="dueDays" min="0" max="365" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Начин на плаќање</mat-label>
+          <mat-select formControlName="paymentTypeCode">
+            @for (type of codebooks().paymentTypes; track type.code) {
+              <mat-option [value]="type.code">{{ type.description }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Валута</mat-label>
+          <mat-select formControlName="currency">
+            @for (currency of codebooks().currencies; track currency.code) {
+              <mat-option [value]="currency.code">
+                {{ currency.code }} — {{ currency.description }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Единица мерка</mat-label>
+          <mat-select formControlName="unit">
+            @for (unit of codebooks().units; track unit.code) {
+              <mat-option [value]="unit.code">{{ unit.code }} — {{ unit.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field class="span-2">
+          <mat-label>Даночен индикатор</mat-label>
+          <mat-select formControlName="taxIndicator">
+            @for (indicator of codebooks().taxIndicators; track indicator.code) {
+              @if (indicator.common) {
+                <mat-option [value]="indicator.code">
+                  {{ indicator.code }} — {{ indicator.categoryName }}
+                </mat-option>
+              }
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field class="span-2">
+          <mat-label>Текст на дното на фактурата</mat-label>
+          <textarea matInput rows="2" formControlName="invoiceFooter"></textarea>
+        </mat-form-field>
+      </form>
+
+      <div class="actions">
+        <button mat-flat-button type="button" (click)="saveDefaults()" [disabled]="saving()">
+          Зачувај
+        </button>
+      </div>
+    </mat-expansion-panel>
+
+    <!-- UJP -------------------------------------------------------------- -->
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title><mat-icon>account_balance</mat-icon> Поврзување со УЈП</mat-panel-title>
+        <mat-panel-description>
+          @if (signerStatus.available) {
+            {{ signerStatus.name }}
+          } @else {
+            Не е поврзано
+          }
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="status" [class.status--off]="!signerStatus.available">
+        <mat-icon>{{ signerStatus.available ? 'verified_user' : 'gpp_maybe' }}</mat-icon>
+        <div>
+          <strong>
+            {{ signerStatus.available ? 'Потписникот е поврзан' : 'Потпишувањето не е конфигурирано' }}
+          </strong>
+          <p>{{ signerStatus.reason ?? signerStatus.name }}</p>
+        </div>
+      </div>
+
+      <p class="note">
+        <mat-icon>info</mat-icon>
+        Прелистувачот не може сам да пристапи до квалификуван сертификат на токен. УЈП за таа
+        цел нуди Native апликација со екстензија за Chrome и Firefox. Додека тоа не е поврзано,
+        сè останато работи: фактурите се создаваат, се проверуваат и УЈП документот може да се
+        прегледа и извезе.
+      </p>
+
+      <form [formGroup]="ujpForm" class="grid">
+        <mat-form-field>
+          <mat-label>EUJP-ID</mat-label>
+          <input matInput formControlName="eujpId" />
+          <mat-hint>Се добива при доделување пристап во е-УЈП</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Сериски број на сертификат</mat-label>
+          <input matInput formControlName="certificateSerialNumber" />
+          <mat-hint>Заглавие X-SERIAL-NUMBER</mat-hint>
+        </mat-form-field>
+      </form>
+
+      <div class="actions">
+        <button mat-flat-button type="button" (click)="saveUjp()" [disabled]="saving()">
+          Зачувај
+        </button>
+      </div>
+
+      <mat-divider class="divider" />
+
+      <h3 class="sub">Шифрарници</h3>
+      <div class="codebooks">
+        <div class="codebooks__stat">
+          <strong>{{ codebookSummary().indicators }}</strong>
+          <span>даночни индикатори</span>
+        </div>
+        <div class="codebooks__stat">
+          <strong>{{ codebookSummary().groups }}</strong>
+          <span>даночни групи</span>
+        </div>
+        <div class="codebooks__stat">
+          <strong>{{ codebookSummary().paymentTypes }}</strong>
+          <span>типови плаќање</span>
+        </div>
+      </div>
+
+      <p class="note">
+        <mat-icon>{{ codebookSummary().syncedAt ? 'cloud_done' : 'cloud_off' }}</mat-icon>
+        @if (codebookSummary().syncedAt) {
+          Последно превземени од УЈП.
+        } @else {
+          Се користат вградените шифрарници, преземени од официјалната документација на УЈП.
+          Повлечете ги живите листи откако ќе внесете EUJP-ID — сите сервиси за шифрарници
+          бараат регистриран корисник.
+        }
+      </p>
+
+      <div class="actions">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="syncCodebooks()"
+          [disabled]="codebookService.syncing()"
+        >
+          <mat-icon>sync</mat-icon>
+          Повлечи од УЈП
+        </button>
+        <span class="env">{{ ujpEnvironment === 'test' ? 'Тест средина' : 'Продукција' }}</span>
+      </div>
+    </mat-expansion-panel>
+  </mat-accordion>
+</div>

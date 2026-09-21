@@ -1,0 +1,258 @@
+@if (invoice(); as inv) {
+  <article class="sheet">
+    <!-- header --------------------------------------------------------- -->
+    <header class="head">
+      <div class="seller">
+        @if (inv.seller.logoDataUrl) {
+          <img class="seller__logo" [src]="inv.seller.logoDataUrl" alt="" />
+        }
+        <div class="seller__name">{{ inv.seller.name }}</div>
+        <div class="seller__lines">
+          <div>{{ formatAddress(inv.seller.address) }}</div>
+          @if (inv.seller.taxNumber) {
+            <div>ЕДБ: {{ inv.seller.taxNumber }}</div>
+          }
+          @if (inv.seller.isVatRegistered && inv.seller.vatNumber) {
+            <div>ДДВ бр.: {{ inv.seller.vatNumber }}</div>
+          }
+          @if (inv.seller.registrationNumber) {
+            <div>ЕМБС: {{ inv.seller.registrationNumber }}</div>
+          }
+          @if (inv.seller.email) {
+            <div>{{ inv.seller.email }}</div>
+          }
+          @if (inv.seller.phone) {
+            <div>{{ inv.seller.phone }}</div>
+          }
+        </div>
+      </div>
+
+      <div class="doc">
+        <h1 class="doc__title">ФАКТУРА</h1>
+        <div class="doc__number">{{ inv.number || 'нацрт' }}</div>
+        <table class="doc__dates">
+          <tbody>
+            <tr>
+              <th>Датум на издавање</th>
+              <td>{{ inv.issueDate | mkDate }}</td>
+            </tr>
+            <tr>
+              <th>Датум на промет</th>
+              <td>{{ inv.turnoverDate | mkDate }}</td>
+            </tr>
+            <tr>
+              <th>Рок на плаќање</th>
+              <td>{{ inv.dueDate | mkDate }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </header>
+
+    <!-- buyer ---------------------------------------------------------- -->
+    <section class="buyer">
+      <div class="buyer__label">Купувач</div>
+      <div class="buyer__name">{{ inv.client.name }}</div>
+      <div class="buyer__lines">
+        <div>{{ formatAddress(inv.client.address) }}</div>
+        @if (inv.client.taxNumber) {
+          <div>ЕДБ: {{ inv.client.taxNumber }}</div>
+        }
+        @if (inv.client.vatNumber) {
+          <div>ДДВ бр.: {{ inv.client.vatNumber }}</div>
+        }
+        @if (inv.client.contactPerson) {
+          <div>Контакт: {{ inv.client.contactPerson }}</div>
+        }
+      </div>
+    </section>
+
+    @if (inv.headerText) {
+      <p class="free-text">{{ inv.headerText }}</p>
+    }
+
+    <!-- items ---------------------------------------------------------- -->
+    <table class="items">
+      <thead>
+        <tr>
+          <th class="c-no">#</th>
+          <th class="c-desc">Опис</th>
+          <th class="c-unit">ЕМ</th>
+          <th class="c-num">Кол.</th>
+          <th class="c-num">Цена</th>
+          @if (hasDiscount()) {
+            <th class="c-num">Попуст</th>
+          }
+          <th class="c-num">Основица</th>
+          <th class="c-tax">Данок</th>
+          <th class="c-num">ДДВ</th>
+          <th class="c-num">Вкупно</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (line of lines(); track line.item.id) {
+          <tr>
+            <td class="c-no">{{ line.lineNo }}</td>
+            <td class="c-desc">
+              {{ line.item.description }}
+              @if (line.item.sku) {
+                <span class="sku">({{ line.item.sku }})</span>
+              }
+            </td>
+            <td class="c-unit">{{ line.item.unit }}</td>
+            <td class="c-num">{{ line.item.qty | amount: 2 }}</td>
+            <td class="c-num">{{ line.unitPriceWoVat | amount }}</td>
+            @if (hasDiscount()) {
+              <td class="c-num">
+                @if (line.item.discountPercent) {
+                  {{ line.item.discountPercent }}%
+                } @else {
+                  —
+                }
+              </td>
+            }
+            <td class="c-num">{{ line.totalPriceWoVat | amount }}</td>
+            <td class="c-tax">
+              @if (line.vatImpact === 'STANDARD') {
+                {{ line.item.vatRate }}%
+              } @else {
+                {{ line.item.taxIndicator }}
+              }
+            </td>
+            <td class="c-num">{{ line.totalVat | amount }}</td>
+            <td class="c-num">{{ line.totalPriceWVat | amount }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <!-- totals --------------------------------------------------------- -->
+    <section class="foot">
+      <div class="foot__left">
+        @if (inv.seller.bankAccount; as bank) {
+          <div class="block">
+            <div class="block__label">Плаќање</div>
+            <div>{{ bank.bankName }}</div>
+            <div class="mono">{{ bank.accountNumber }}</div>
+            @if (inv.paymentTypeDesc) {
+              <div>{{ inv.paymentTypeDesc }}</div>
+            }
+            <div class="ref">Повикување на број: {{ inv.number }}</div>
+          </div>
+        }
+
+        @if (vatTotals().length > 1) {
+          <div class="block">
+            <div class="block__label">Рекапитулар по даночна стапка</div>
+            <table class="recap">
+              <thead>
+                <tr>
+                  <th>Индикатор</th>
+                  <th class="c-num">Стапка</th>
+                  <th class="c-num">Основица</th>
+                  <th class="c-num">ДДВ</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of vatTotals(); track row.taxIndicator) {
+                  <tr>
+                    <td>{{ row.taxIndicator }}</td>
+                    <td class="c-num">{{ row.vatPercent }}%</td>
+                    <td class="c-num">{{ row.taxableAmount | amount }}</td>
+                    <td class="c-num">{{ row.vatAmount | amount }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <div class="foot__right">
+        <table class="totals">
+          <tbody>
+            <tr>
+              <th>Основица</th>
+              <td>{{ totals().netAmount | amount }}</td>
+            </tr>
+            @if (totals().discountAmount > 0) {
+              <tr>
+                <th>Попуст</th>
+                <td>− {{ totals().discountAmount | amount }}</td>
+              </tr>
+              <tr>
+                <th>Основица по попуст</th>
+                <td>{{ totals().netAmountDisc | amount }}</td>
+              </tr>
+            }
+            <tr>
+              <th>ДДВ</th>
+              <td>{{ totals().vatAmount | amount }}</td>
+            </tr>
+            <tr>
+              <th>Вкупно</th>
+              <td>{{ totals().grossAmount | amount }}</td>
+            </tr>
+            @if (totals().grossAmountRounded !== totals().grossAmount) {
+              <tr>
+                <th>Заокружување</th>
+                <td>{{ totals().grossAmountRounded - totals().grossAmount | amount }}</td>
+              </tr>
+            }
+            @if (totals().advanceAmount > 0) {
+              <tr>
+                <th>Аванс</th>
+                <td>− {{ totals().advanceAmount | amount }}</td>
+              </tr>
+            }
+            <tr class="totals__grand">
+              <th>За плаќање</th>
+              <td>{{ totals().finalAmount | money: inv.currency }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    @if (amountInWords()) {
+      <p class="words">Со зборови: {{ amountInWords() }}</p>
+    }
+
+    @for (note of taxNotes(); track note) {
+      <p class="tax-note">{{ note }}</p>
+    }
+
+    @if (inv.notes) {
+      <p class="free-text">{{ inv.notes }}</p>
+    }
+
+    <!-- УЈП receipt ---------------------------------------------------- -->
+    @if (inv.ujp; as receipt) {
+      <section class="ujp">
+        @if (qrDataUrl(); as qr) {
+          <img class="ujp__qr" [src]="qr" alt="УЈП QR код" />
+        }
+        <div class="ujp__text">
+          <div class="ujp__label">Регистрирана во Управа за јавни приходи</div>
+          <div class="mono">EUID: {{ receipt.euid }}</div>
+          <div class="ujp__link">{{ receipt.qrLink }}</div>
+        </div>
+      </section>
+    }
+
+    @if (inv.footerText) {
+      <p class="free-text free-text--footer">{{ inv.footerText }}</p>
+    }
+
+    <footer class="signatures">
+      <div>
+        <div class="sig-line"></div>
+        <span>Издал</span>
+      </div>
+      <div>
+        <div class="sig-line"></div>
+        <span>Примил</span>
+      </div>
+    </footer>
+  </article>
+}

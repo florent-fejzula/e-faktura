@@ -1,0 +1,60 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  /* Fields keep their natural height: a neighbour whose hint wraps to two
+     lines would otherwise stretch this one's outline into a tall empty box. */
+  align-items: start;
+  /* Dialog content already scrolls; this stops a wide field forcing sideways
+     scroll on a narrow phone. */
+  min-width: min(520px, 78vw);
+}
+
+@media (max-width: 599px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+}
+
+.span-2 {
+  grid-column: 1 / -1;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  margin: 2px 0 8px;
+  padding: 6px 10px 6px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-large);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+}
+
+.save-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}

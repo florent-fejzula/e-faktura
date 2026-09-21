@@ -1,0 +1,96 @@
+<h2 mat-dialog-title>Сподели фактура</h2>
+
+<mat-dialog-content>
+  <div class="channels">
+    <button
+      type="button"
+      class="channel channel--mail"
+      (click)="sendEmail()"
+      [disabled]="!hasEmail()"
+      [matTooltip]="hasEmail() ? 'Отвора нов е-маил со пополнет текст' : 'Внесете е-пошта'"
+    >
+      <mat-icon>mail</mat-icon>
+      <span>Е-пошта</span>
+    </button>
+
+    <button
+      type="button"
+      class="channel channel--wa"
+      (click)="sendWhatsApp()"
+      matTooltip="Отвора WhatsApp со подготвена порака"
+    >
+      <mat-icon>chat</mat-icon>
+      <span>WhatsApp</span>
+    </button>
+
+    <button
+      type="button"
+      class="channel channel--viber"
+      (click)="sendViber()"
+      matTooltip="Отвора Viber и бара со кого да ја споделите"
+    >
+      <mat-icon>forum</mat-icon>
+      <span>Viber</span>
+    </button>
+
+    @if (canNativeShare) {
+      <button
+        type="button"
+        class="channel"
+        (click)="nativeShare()"
+        matTooltip="Сите апликации на уредот"
+      >
+        <mat-icon>ios_share</mat-icon>
+        <span>Друго</span>
+      </button>
+    }
+
+    <button type="button" class="channel" (click)="copy()" matTooltip="Копирај го текстот">
+      <mat-icon>content_copy</mat-icon>
+      <span>Копирај</span>
+    </button>
+  </div>
+
+  <div class="fields">
+    <mat-form-field>
+      <mat-label>Е-пошта на клиентот</mat-label>
+      <input matInput type="email" [ngModel]="email()" (ngModelChange)="email.set($event)" />
+      @if (!hasEmail()) {
+        <mat-hint>Потребна е за испраќање по е-пошта.</mat-hint>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Телефон за WhatsApp</mat-label>
+      <input matInput type="tel" [ngModel]="phone()" (ngModelChange)="phone.set($event)" />
+      <mat-hint>Празно поле отвора избор на контакт.</mat-hint>
+    </mat-form-field>
+  </div>
+
+  <mat-form-field class="message">
+    <mat-label>Порака</mat-label>
+    <textarea
+      matInput
+      rows="9"
+      [ngModel]="message()"
+      (ngModelChange)="message.set($event)"
+    ></textarea>
+  </mat-form-field>
+
+  <p class="note">
+    <mat-icon>picture_as_pdf</mat-icon>
+    <span>
+      Пораката го содржи износот, рокот и сметката. Самиот документ прикачете го како PDF —
+      <button type="button" class="linkish" (click)="printPdf()">зачувајте го</button>
+      преку „Печати“ и изберете <em>Save as PDF</em>.
+    </span>
+  </p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="ref.close(null)">Затвори</button>
+  <button mat-flat-button type="button" (click)="printPdf()">
+    <mat-icon>picture_as_pdf</mat-icon>
+    Зачувај PDF
+  </button>
+</mat-dialog-actions>

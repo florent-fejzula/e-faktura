@@ -1,0 +1,270 @@
+:host {
+  display: block;
+  height: 100dvh;
+}
+
+.shell {
+  display: flex;
+  height: 100%;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.grow {
+  flex: 1 1 auto;
+}
+
+/* --- desktop rail --------------------------------------------------------- */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 88px;
+  padding: 12px 8px;
+  background: var(--mat-sys-surface);
+  border-inline-end: 1px solid var(--mat-sys-outline-variant);
+}
+
+.rail__brand {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  color: var(--mat-sys-on-primary-container);
+  background: var(--mat-sys-primary-container);
+}
+
+.rail__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-medium);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+}
+
+.rail__item--active {
+  color: var(--mat-sys-on-secondary-container);
+  background: var(--mat-sys-secondary-container);
+}
+
+.rail__label {
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.rail__avatar {
+  margin-bottom: 4px;
+}
+
+/* --- top bar -------------------------------------------------------------- */
+
+.main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 60px;
+  padding-inline: 12px;
+  background: var(--mat-sys-surface);
+  border-block-end: 1px solid var(--mat-sys-outline-variant);
+}
+
+.company-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(46vw, 420px);
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-title-small);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--mat-sys-surface-container-high);
+  }
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.company-switch__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.company-switch__caret {
+  flex: none;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- avatars -------------------------------------------------------------- */
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+  font: var(--mat-sys-label-large);
+  letter-spacing: 0.4px;
+}
+
+.avatar--sm {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.account-head {
+  pointer-events: none;
+  opacity: 1 !important;
+}
+
+.account-head__name {
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-on-surface);
+}
+
+.account-head__email {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+/* --- handset -------------------------------------------------------------- */
+
+.shell--handset .content {
+  /* Leave room for the tab bar plus the home indicator on iOS. */
+  padding-block-end: calc(64px + env(safe-area-inset-bottom));
+}
+
+.tabbar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 10;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding-block-end: env(safe-area-inset-bottom);
+  background: var(--mat-sys-surface);
+  border-block-start: 1px solid var(--mat-sys-outline-variant);
+}
+
+.tabbar__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 11px;
+  text-decoration: none;
+  /* Comfortable thumb target regardless of icon metrics. */
+  min-height: 56px;
+}
+
+.tabbar__item--active {
+  color: var(--mat-sys-primary);
+}
+
+/* A bare "+" is not self-explanatory, and an icon alone in a text button sits
+   off-centre. Keep a word next to it — just a shorter one on a phone. */
+.new-invoice__label--short {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  .new-invoice__label {
+    display: none;
+  }
+  .new-invoice__label--short {
+    display: inline;
+  }
+  .new-invoice {
+    min-width: 0;
+    padding-inline: 14px;
+  }
+}
+
+/* Subscription warning. Sits between the toolbar and the page so it is
+   unmissable without covering anything, and never prints. */
+.sub-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.sub-banner--expired {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+/* The way out of the warning. Pushed to the end so it reads as the answer to
+   the sentence rather than competing with it. */
+.sub-banner__cta {
+  margin-inline-start: auto;
+  padding: 5px 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: var(--mat-sys-label-medium);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+}

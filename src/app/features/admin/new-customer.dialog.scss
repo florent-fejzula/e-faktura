@@ -1,0 +1,159 @@
+/* The dialog is opened with an explicit width rather than being sized by this
+   grid, which is what the shorter dialogs in the app do. A form this long has
+   to scroll anyway, and letting it drive the panel width made the second column
+   overflow the right padding by the width of the scrollbar. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  /* Fields keep their natural height: a neighbour whose hint wraps would
+     otherwise stretch this one into a tall empty outline. */
+  align-items: start;
+}
+
+@media (max-width: 599px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.span-2 {
+  grid-column: 1 / -1;
+}
+
+/* Section headings carry the form: it is long enough that unbroken fields
+   stop reading as groups. */
+.section {
+  margin: 10px 0 -4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-title-small);
+
+  &:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+
+/* --- handover panel ------------------------------------------------------- */
+
+h2[mat-dialog-title] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ok {
+  color: var(--mat-sys-primary);
+}
+
+.lede {
+  margin: 0 0 16px;
+  max-width: 52ch;
+  color: var(--mat-sys-on-surface-variant);
+  line-height: 1.5;
+}
+
+.creds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 14px;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.cred {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.cred__label {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.cred__value {
+  /* The one place in the app where character-level accuracy matters more than
+     typography: a monospace face keeps l/1 and O/0 apart when read aloud. */
+  font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.cred__hint {
+  margin: 2px 0 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.message {
+  display: block;
+  margin-top: 18px;
+}
+
+.message__label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.message textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 10px;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-small);
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.save-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
