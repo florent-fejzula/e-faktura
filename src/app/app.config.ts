@@ -4,6 +4,7 @@ import { provideHttpClient, withFetch } from '@angular/common/http';
 import {
   ApplicationConfig,
   LOCALE_ID,
+  isDevMode,
   provideBrowserGlobalErrorListeners,
   provideZoneChangeDetection,
 } from '@angular/core';
@@ -13,6 +14,7 @@ import { DateAdapter, MAT_DATE_LOCALE, provideNativeDateAdapter } from '@angular
 import { MAT_ICON_DEFAULT_OPTIONS } from '@angular/material/icon';
 import { MAT_SNACK_BAR_DEFAULT_OPTIONS } from '@angular/material/snack-bar';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import { provideServiceWorker } from '@angular/service-worker';
 
 import { routes } from './app.routes';
 import { provideAppFirebase } from './core/firebase/firebase.providers';
@@ -40,6 +42,16 @@ export const appConfig: ApplicationConfig = {
     provideAnimationsAsync(),
     provideHttpClient(withFetch()),
     provideAppFirebase(),
+
+    // Makes the app installable and lets it open without a connection. Off in
+    // development, where a cached shell would hide every edit behind a reload.
+    // Registration waits for the app to settle so the SW's prefetch of every
+    // chunk does not compete with first paint — but only for 10s, because
+    // Firestore's open listeners can keep the app from ever reporting stable.
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:10000',
+    }),
 
     { provide: LOCALE_ID, useValue: 'mk' },
     { provide: MAT_DATE_LOCALE, useValue: 'mk-MK' },

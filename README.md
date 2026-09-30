@@ -30,6 +30,7 @@ through company setup on first sign-in.
 | `npm run e2e` | End-to-end smoke test (needs dev server + emulators) |
 | `npm run e2e:shots` | Screenshots of every screen into `e2e/shots/` |
 | `npm run codebooks:gen` | Regenerate the tax-indicator list from `docs/ujp/` |
+| `npm run icons:gen` | Re-render the app icons and favicon from the brand glyph |
 | `npm run functions:build` | Compile the Cloud Function (the emulator runs `lib/`) |
 
 ### Becoming the admin
@@ -316,6 +317,44 @@ tests. The document is *not* attached: a page cannot put a file into a `mailto:`
 draft or a WhatsApp web intent, so the PDF comes from the browser's print dialog
 and the sender attaches it. Attaching automatically needs either a bundled
 Cyrillic PDF font or a server-side renderer — see the note in that file.
+
+## Installing as an app
+
+The app is a PWA: on a phone, **Chrome → ⋮ → Install app** (Android) or
+**Share → Add to Home Screen** (iOS Safari) puts it on the home screen, where it
+opens full-screen without the browser around it. Long-pressing the Android icon
+offers a **Нова фактура** shortcut.
+
+What makes that work:
+
+- `public/manifest.webmanifest` — name, colours, icons, the shortcut.
+- `public/icons/` — rendered by `npm run icons:gen` (`tools/gen-icons.mjs`) from
+  the `receipt_long` glyph the navigation rail uses, in the theme's primary
+  colour. There is a *maskable* variant because Android crops icons to its own
+  shape; the glyph sits inside the central safe zone so no crop clips it.
+- The Angular service worker (`ngsw-config.json`), **production builds only** —
+  `ng serve` and the tests run without it, so a cached shell never hides an edit.
+  It precaches the app shell and every lazy chunk, so the installed app opens
+  with no connection; the icon font is cached on first use for the same reason.
+  Firestore keeps its own offline copy of the data, so invoices already seen
+  stay readable offline too.
+
+**Updates.** A service worker keeps running the version it was opened with and
+swaps on the next load. An installed app can sit in the background for days
+without loading, so `core/pwa/app-update.service.ts` checks for a new version
+whenever the app comes back to the foreground and shows *Достапна е нова
+верзија* with an **Освежи** button. It never reloads by itself — that would throw
+away an invoice being edited.
+
+**Cache headers matter.** In `firebase.json` only the content-hashed bundles
+(`main-*.js`, `chunk-*.js`, …) are cached for a year. `index.html`,
+`ngsw-worker.js`, `ngsw.json` and the manifest are `no-cache`: a broader
+`*.js` rule would have pinned the service worker itself for a year.
+
+**Google sign-in on iOS.** An app added to the home screen on iPhone runs in its
+own sandbox, where Firebase's sign-in pop-up is known to be unreliable. E-mail
+and password sign-in does not use a pop-up and is unaffected. Neither platform
+has been tested on a physical device yet.
 
 ## Notes
 
