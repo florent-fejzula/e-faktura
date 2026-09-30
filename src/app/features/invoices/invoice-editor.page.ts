@@ -23,6 +23,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map, of, switchMap } from 'rxjs';
 import { ClientService } from '../../core/data/client.service';
@@ -38,6 +39,7 @@ import { validateInvoice } from '../../core/ujp/ujp-validator';
 import { amountInWordsMk } from '../../core/util/amount-in-words';
 import { addDays, fromIsoDate, toIsoDate } from '../../core/util/dates';
 import { matchesSearch, newId } from '../../core/util/id';
+import { pdfFileName } from '../../core/util/share';
 import { toNumber } from '../../core/util/money';
 import { ClientDialog, type ClientDialogData } from '../clients/client.dialog';
 import { ConfirmDialog, type ConfirmData } from '../../shared/confirm.dialog';
@@ -79,6 +81,11 @@ import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './invoice-editor.page.html',
   styleUrl: './invoice-editor.page.scss',
+  // Window events rather than the Печати button, so Ctrl+P names the file too.
+  host: {
+    '(window:beforeprint)': 'titleForPrint()',
+    '(window:afterprint)': 'restoreTitle()',
+  },
 })
 export class InvoiceEditorPage {
   private readonly route = inject(ActivatedRoute);
@@ -87,6 +94,7 @@ export class InvoiceEditorPage {
   private readonly clientService = inject(ClientService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly title = inject(Title);
   protected readonly companies = inject(CompanyService);
   protected readonly codebookService = inject(CodebookService);
 
@@ -611,6 +619,27 @@ export class InvoiceEditorPage {
 
   protected print(): void {
     window.print();
+  }
+
+  /** The route title while printing, so it can be put back afterwards. */
+  private titleBeforePrint: string | null = null;
+
+  /**
+   * "Save as PDF" names the file after the page title, which is otherwise the
+   * route's generic „Фактура — е-Фактура“ for every invoice. Swapped only for
+   * the duration of the print so the browser tab keeps its usual name.
+   */
+  protected titleForPrint(): void {
+    const invoice = this.invoice();
+    if (!invoice) return;
+    this.titleBeforePrint ??= this.title.getTitle();
+    this.title.setTitle(pdfFileName(invoice));
+  }
+
+  protected restoreTitle(): void {
+    if (this.titleBeforePrint === null) return;
+    this.title.setTitle(this.titleBeforePrint);
+    this.titleBeforePrint = null;
   }
 
   private reportError(error: unknown): void {

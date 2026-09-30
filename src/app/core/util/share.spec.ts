@@ -1,6 +1,7 @@
 import type { Invoice } from '../models/invoice.model';
 import {
   mailtoHref,
+  pdfFileName,
   shareBody,
   shareSubject,
   toInternationalPhone,
@@ -55,6 +56,27 @@ describe('share message', () => {
       seller: { name: 'ДОДИ ТЕК ДООЕЛ', bankAccount: null },
     }));
     expect(body).not.toContain('Сметка:');
+  });
+});
+
+describe('PDF file name', () => {
+  it('is the seller and the invoice number', () => {
+    expect(pdfFileName(invoiceFixture())).toBe('ДОДИ ТЕК ДООЕЛ - 0002-2026');
+  });
+
+  it('turns every slash in the number into a hyphen', () => {
+    expect(pdfFileName(invoiceFixture({ number: 'ФА/08/2026/0007' }))).toBe(
+      'ДОДИ ТЕК ДООЕЛ - ФА-08-2026-0007',
+    );
+  });
+
+  it('names a draft as such rather than leaving a dangling separator', () => {
+    expect(pdfFileName(invoiceFixture({ number: '' }))).toBe('ДОДИ ТЕК ДООЕЛ - нацрт');
+  });
+
+  it('drops quotes and replaces characters Windows forbids', () => {
+    const seller = { name: 'ТРГОВИЈА „СОНЦЕ“ ДОО: СКОПЈЕ', bankAccount: null };
+    expect(pdfFileName(invoiceFixture({ seller }))).toBe('ТРГОВИЈА СОНЦЕ ДОО- СКОПЈЕ - 0002-2026');
   });
 });
 

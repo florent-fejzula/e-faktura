@@ -13,6 +13,24 @@ import { formatAmount } from './money';
  * sender adds, or through the native share sheet on a phone.
  */
 
+/**
+ * What "Save as PDF" names the file: `ДОДИ ТЕК ДООЕЛ - 0002-2026`.
+ *
+ * Browsers take the default file name from the page title, so the editor puts
+ * this in the title for the duration of the print. The slash in the invoice
+ * number becomes a hyphen, and so does anything else Windows refuses in a file
+ * name — left in, the browser substitutes its own character or cuts the name
+ * short at that point. Quotes around a trading name („...“) are dropped, not
+ * replaced, because a hyphen there reads as a separator.
+ */
+export function pdfFileName(invoice: Invoice): string {
+  const seller = invoice.seller.name
+    .replace(/["„“”«»]/g, '')
+    .replace(/[\\/:*?<>|]/g, '-');
+  const number = (invoice.number || 'нацрт').replace(/[\\/:*?"<>|]/g, '-');
+  return `${seller} - ${number}`.replace(/\s+/g, ' ').trim();
+}
+
 /** Subject line for the e-mail channel. */
 export function shareSubject(invoice: Invoice): string {
   const number = invoice.number || 'нацрт';
