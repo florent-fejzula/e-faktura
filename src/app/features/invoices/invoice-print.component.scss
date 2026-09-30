@@ -15,19 +15,27 @@
   }
 }
 
+/*
+ * The page margins live here, as padding, instead of on @page (see below).
+ * `clone` repeats the padding on every printed page rather than only above the
+ * first and below the last, so page two of a long invoice does not start at
+ * the paper's edge.
+ */
 .sheet {
   box-sizing: border-box;
   width: 100%;
-  padding: 0;
+  padding: 16mm 14mm;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   color: #111;
   font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 10.5pt;
+  font-size: 11.5pt;
   line-height: 1.4;
 }
 
 .mono {
   font-family: 'Roboto Mono', ui-monospace, monospace;
-  font-size: 9.5pt;
+  font-size: 10.5pt;
 }
 
 .c-num {
@@ -53,14 +61,14 @@
 }
 
 .seller__name {
-  font-size: 13pt;
+  font-size: 14pt;
   font-weight: 700;
 }
 
 .seller__lines,
 .buyer__lines {
   margin-top: 3pt;
-  font-size: 9.5pt;
+  font-size: 10.5pt;
   color: #333;
 }
 
@@ -71,21 +79,21 @@
 
 .doc__title {
   margin: 0;
-  font-size: 20pt;
+  font-size: 22pt;
   font-weight: 700;
   letter-spacing: 1pt;
 }
 
 .doc__number {
   margin-bottom: 6pt;
-  font-size: 13pt;
+  font-size: 14pt;
   font-variant-numeric: tabular-nums;
 }
 
 .doc__dates {
   margin-left: auto;
   border-collapse: collapse;
-  font-size: 9.5pt;
+  font-size: 10.5pt;
 
   th {
     padding: 1pt 8pt 1pt 0;
@@ -113,14 +121,14 @@
 .buyer__label,
 .block__label {
   margin-bottom: 2pt;
-  font-size: 8pt;
+  font-size: 9pt;
   text-transform: uppercase;
   letter-spacing: 0.6pt;
   color: #666;
 }
 
 .buyer__name {
-  font-size: 12pt;
+  font-size: 13pt;
   font-weight: 600;
 }
 
@@ -130,14 +138,14 @@
   width: 100%;
   margin-top: 6pt;
   border-collapse: collapse;
-  font-size: 9.5pt;
+  font-size: 10.5pt;
 
   th {
     padding: 4pt 5pt;
     background: #f0f0f0;
     border-bottom: 0.75pt solid #999;
     text-align: left;
-    font-size: 8.5pt;
+    font-size: 9.5pt;
     text-transform: uppercase;
     letter-spacing: 0.3pt;
   }
@@ -174,7 +182,7 @@
 
 .sku {
   color: #666;
-  font-size: 8.5pt;
+  font-size: 9.5pt;
 }
 
 /* --- totals --------------------------------------------------------------- */
@@ -199,7 +207,7 @@
 
 .block {
   margin-bottom: 10pt;
-  font-size: 9.5pt;
+  font-size: 10.5pt;
 }
 
 .ref {
@@ -209,7 +217,7 @@
 
 .recap {
   border-collapse: collapse;
-  font-size: 9pt;
+  font-size: 10pt;
 
   th,
   td {
@@ -246,7 +254,7 @@
   td {
     padding-top: 5pt;
     border-top: 1.25pt solid #111;
-    font-size: 12pt;
+    font-size: 13pt;
     font-weight: 700;
     color: #111;
   }
@@ -254,7 +262,7 @@
 
 .words {
   margin: 8pt 0 0;
-  font-size: 9.5pt;
+  font-size: 10.5pt;
   font-style: italic;
 }
 
@@ -262,12 +270,12 @@
   margin: 4pt 0 0;
   padding: 4pt 6pt;
   background: #f4f4f4;
-  font-size: 9pt;
+  font-size: 10pt;
 }
 
 .free-text {
   margin: 8pt 0 0;
-  font-size: 9.5pt;
+  font-size: 10.5pt;
   white-space: pre-wrap;
 }
 
@@ -295,12 +303,12 @@
 }
 
 .ujp__label {
-  font-size: 9pt;
+  font-size: 10pt;
   font-weight: 600;
 }
 
 .ujp__link {
-  font-size: 8pt;
+  font-size: 9pt;
   color: #555;
   word-break: break-all;
 }
@@ -317,7 +325,7 @@
   > div {
     flex: 1;
     text-align: center;
-    font-size: 9pt;
+    font-size: 10pt;
     color: #444;
   }
 }
@@ -327,7 +335,16 @@
   border-top: 0.75pt solid #888;
 }
 
+/*
+ * Zero page margin, on purpose. Browsers print their own header and footer —
+ * the page title and the URL — inside the page margin, and the print dialog's
+ * Margins setting can shrink that margin under the invoice: with "Minimum" or
+ * "None" the header was printed straight over the seller's name. With no
+ * margin Chrome has nowhere to put it and leaves it out; a browser that draws
+ * it anyway (Firefox does, at the paper's edge) lands on the sheet's own blank
+ * padding instead of on the invoice.
+ */
 @page {
   size: A4;
-  margin: 14mm 12mm;
+  margin: 0;
 }
