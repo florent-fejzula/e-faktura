@@ -26,14 +26,22 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map, of, switchMap } from 'rxjs';
+import { CatalogService } from '../../core/data/catalog.service';
 import { ClientService } from '../../core/data/client.service';
 import { CodebookService } from '../../core/data/codebook.service';
 import { CompanyService } from '../../core/data/company.service';
 import { InvoiceService, createItem } from '../../core/data/invoice.service';
+import {
+  applyCatalogItem,
+  catalogFieldsFromLine,
+  findByName,
+  type CatalogItem,
+} from '../../core/models/catalog.model';
 import type { Client } from '../../core/models/client.model';
 import { snapshotClient } from '../../core/models/client.model';
 import type { Invoice, InvoiceItem, PriceMode } from '../../core/models/invoice.model';
 import { isDeletable, isEditable } from '../../core/models/invoice.model';
+import { indicatorShortLabel, resolveIndicator } from '../../core/ujp/codebooks';
 import { computeInvoice } from '../../core/ujp/totals';
 import { validateInvoice } from '../../core/ujp/ujp-validator';
 import { amountInWordsMk } from '../../core/util/amount-in-words';
@@ -92,6 +100,7 @@ export class InvoiceEditorPage {
   private readonly router = inject(Router);
   private readonly invoiceService = inject(InvoiceService);
   private readonly clientService = inject(ClientService);
+  private readonly catalogService = inject(CatalogService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly title = inject(Title);
@@ -124,6 +133,68 @@ export class InvoiceEditorPage {
       .filter((c) => matchesSearch(`${c.name} ${c.taxNumber}`, query))
       .slice(0, 8);
   });
+
+  // --- Ценовник module ------------------------------------------------------
+
+  protected readonly catalogEnabled = computed(() => this.companies.hasModule('catalog'));
+
+  /** The price list, loaded only for companies that have the module. */
+  private readonly catalogEntries = toSignal(
+    toObservable(
+      computed(() => (this.catalogEnabled() ? this.companies.activeCompanyId() : null)),
+    ).pipe(switchMap((id) => this.catalogService.list(id))),
+    { initialValue: [] as CatalogItem[] },
+  );
+
+  /**
+   * Price-list entries for a line's description box. With nothing typed it
+   * offers the start of the list, so the list is discoverable from an empty
+   * line; once the description matches an entry exactly there is nothing left
+   * to suggest.
+   */
+  protected catalogMatches(query: string): CatalogItem[] {
+    if (!this.catalogEnabled()) return [];
+    const all = this.catalogEntries();
+    const text = query.trim();
+    if (!text) return all.slice(0, 8);
+    if (findByName(all, text)?.name === text) return [];
+    return all.filter((e) => matchesSearch(`${e.name} ${e.sku}`, text)).slice(0, 8);
+  }
+
+  protected applyCatalog(index: number, entry: CatalogItem): void {
+    const current = this.invoice();
+    if (!current) return;
+    const items = current.items.map((item, i) => (i === index ? applyCatalogItem(item, entry) : item));
+    this.patch({ items });
+  }
+
+  /**
+   * "Save to price list" from a line. A line whose description already names
+   * an entry updates that entry rather than adding a near-duplicate — the
+   * usual reason to do this is that the price changed.
+   */
+  protected async saveLineToCatalog(index: number): Promise<void> {
+    const company = this.companies.activeCompany();
+    const line = this.invoice()?.items[index];
+    if (!company || !line) return;
+
+    const fields = catalogFieldsFromLine(line);
+    if (!fields.name) {
+      this.snackBar.open('Внесете опис на ставката пред да ја зачувате во ценовникот.', 'Во ред');
+      return;
+    }
+
+    const existing = findByName(this.catalogEntries(), fields.name);
+    try {
+      await this.catalogService.save({ ...(existing ?? this.catalogService.blank(company)), ...fields });
+      this.snackBar.open(
+        existing ? `„${fields.name}“ е ажурирано во ценовникот.` : `„${fields.name}“ е додадено во ценовникот.`,
+        'Во ред',
+      );
+    } catch (error) {
+      this.reportError(error);
+    }
+  }
 
   // --- derived amounts -----------------------------------------------------
 
@@ -177,27 +248,9 @@ export class InvoiceEditorPage {
   );
   protected readonly showAllIndicators = signal(false);
 
-  /**
-   * Short label for the closed tax-indicator field, e.g. `ДДВ 18%` or
-   * `DDV-11-A · пренесен`. The full category name is far too long for a field
-   * this narrow, but the bare code alone tells a user nothing.
-   */
+  /** Short label for the closed tax-indicator field, e.g. `ДДВ 18%`. */
   protected indicatorLabel(code: string): string {
-    const set = this.codebooks();
-    const indicator = set.taxIndicators.find((i) => i.code === code);
-    if (!indicator) return code;
-
-    const rate = set.taxGroups.find((g) => g.code === indicator.taxGroupCode)?.percent ?? 0;
-    switch (indicator.vatImpact) {
-      case 'STANDARD':
-        return `ДДВ ${rate}%`;
-      case 'PRENESEN':
-        return `${code} · пренесен`;
-      case 'OSLOBODEN':
-        return `${code} · ослободен`;
-      case 'NULA':
-        return `${code} · без ДДВ`;
-    }
+    return indicatorShortLabel(this.codebooks(), code);
   }
 
   protected readonly units = computed(() => this.codebooks().units);
@@ -262,24 +315,19 @@ export class InvoiceEditorPage {
    * group, so the two can never disagree with each other.
    */
   protected setIndicator(index: number, code: string): void {
-    const set = this.codebooks();
-    const indicator = set.taxIndicators.find((i) => i.code === code);
-    if (!indicator) return;
-    const group = set.taxGroups.find((g) => g.code === indicator.taxGroupCode);
-    const rate =
-      indicator.vatImpact === 'OSLOBODEN' || indicator.vatImpact === 'NULA'
-        ? 0
-        : (group?.percent ?? 0);
+    const resolved = resolveIndicator(this.codebooks(), code);
+    if (!resolved) return;
 
     // A "with VAT" price is meaningless where no VAT is charged, so fall back
     // to net entry rather than silently reinterpreting the number.
-    const priceMode: PriceMode =
-      indicator.vatImpact === 'STANDARD' ? this.invoice()!.items[index].priceMode : 'net';
+    const priceMode: PriceMode = resolved.allowsGrossPrice
+      ? this.invoice()!.items[index].priceMode
+      : 'net';
 
     this.patchItem(index, {
-      taxIndicator: code,
-      vatGroup: indicator.taxGroupCode,
-      vatRate: rate,
+      taxIndicator: resolved.taxIndicator,
+      vatGroup: resolved.vatGroup,
+      vatRate: resolved.vatRate,
       priceMode,
     });
   }

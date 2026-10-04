@@ -55,6 +55,20 @@ service cloud.firestore {
       return after == before || (before == null && after.plan == 'trial');
     }
 
+    // Optional features. Like the subscription, only the operator may switch
+    // them: a client that could set its own `modules` could unlock anything.
+    // `get(..., null)` makes "absent" and "unchanged" the same thing, so a
+    // company that never had the field can keep saving its settings.
+    function modulesUnchanged() {
+      return request.resource.data.get('modules', null) == resource.data.get('modules', null);
+    }
+
+    // A module's own data is writable only while the module is on — the switch
+    // is enforced here, not just by hiding a menu entry.
+    function moduleEnabled(companyId, module) {
+      return companyData(companyId).get('modules', {}).get(module, false) == true;
+    }
+
     function subscribed(companyId) {
       let sub = companyData(companyId).get('subscription', null);
       // Absent means "not backfilled yet", not "lapsed" — and it cannot be
@@ -106,7 +120,8 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.memberUids.hasOnly([request.auth.uid])
         && request.resource.data.memberUids.hasAll([request.auth.uid])
-        && request.resource.data.subscription.plan == 'trial';
+        && request.resource.data.subscription.plan == 'trial'
+        && !('modules' in request.resource.data);
 
       // Ownership cannot be reassigned by an update, only the owner may change
       // the member list, and a normal user may not move the subscription —
@@ -116,6 +131,7 @@ service cloud.firestore {
         isMember(companyId)
         && request.resource.data.ownerUid == resource.data.ownerUid
         && subscriptionUnchangedOrFirstSet()
+        && modulesUnchanged()
         && (
           request.resource.data.memberUids == resource.data.memberUids
           || request.auth.uid == resource.data.ownerUid
@@ -149,6 +165,14 @@ service cloud.firestore {
 
       match /clients/{clientId} {
         allow read, write: if isMember(companyId);
+      }
+
+      // Ценовник (price list) module. Readable by members regardless, so a
+      // list built while the module was on is still there if it is switched
+      // back on; writable only while it is on.
+      match /catalog/{itemId} {
+        allow read: if isMember(companyId);
+        allow write: if isMember(companyId) && moduleEnabled(companyId, 'catalog');
       }
 
       // Cached UJP code lists and other per-company settings.

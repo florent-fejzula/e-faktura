@@ -4,6 +4,7 @@ import { Router, type CanActivateFn } from '@angular/router';
 import { filter, map, of, take } from 'rxjs';
 import { AdminService } from '../data/admin.service';
 import { CompanyService } from '../data/company.service';
+import type { ModuleId } from '../modules/modules';
 import { AuthService } from './auth.service';
 
 /**
@@ -110,3 +111,21 @@ export const subscriptionGuard: CanActivateFn = () => {
     ),
   );
 };
+
+/**
+ * Keeps a module's screens behind its switch. A bookmark to the price list
+ * after the operator turned it off lands on the invoice list instead of on an
+ * empty page whose saves the rules would refuse.
+ */
+export function moduleGuard(id: ModuleId): CanActivateFn {
+  return () => {
+    const companies = inject(CompanyService);
+    const router = inject(Router);
+
+    return toObservable(companies.isLoading).pipe(
+      filter((loading) => !loading),
+      take(1),
+      map(() => (companies.hasModule(id) ? true : router.createUrlTree(['/fakturi']))),
+    );
+  };
+}

@@ -208,12 +208,31 @@
                 <div class="item__row item__row--desc">
                   <mat-form-field class="f-grow no-subscript" subscriptSizing="fixed">
                     <mat-label>Опис</mat-label>
+                    <!-- With the Ценовник module on, typing here offers the
+                         price list; picking an entry fills the whole line.
+                         Without it the autocomplete is inert. -->
                     <input
                       matInput
+                      [matAutocomplete]="catalogAuto"
+                      [matAutocompleteDisabled]="!catalogEnabled() || !editable()"
                       [ngModel]="line.item.description"
                       (ngModelChange)="patchItem(i, { description: $event })"
                       [readonly]="!editable()"
                     />
+                    <mat-autocomplete #catalogAuto="matAutocomplete">
+                      @for (entry of catalogMatches(line.item.description); track entry.id) {
+                        <mat-option
+                          [value]="entry.name"
+                          (onSelectionChange)="$event.isUserInput && applyCatalog(i, entry)"
+                        >
+                          <span class="opt-name">{{ entry.name }}</span>
+                          <span class="opt-tin">
+                            {{ entry.unitPrice | amount }} / {{ entry.unit }}
+                            {{ entry.priceMode === 'gross' ? 'со ДДВ' : 'без ДДВ' }}
+                          </span>
+                        </mat-option>
+                      }
+                    </mat-autocomplete>
                   </mat-form-field>
 
                   @if (editable()) {
@@ -642,6 +661,13 @@
       <mat-icon>arrow_downward</mat-icon>
       <span>Помести надолу</span>
     </button>
+    @if (catalogEnabled()) {
+      <mat-divider />
+      <button mat-menu-item type="button" (click)="saveLineToCatalog(index)">
+        <mat-icon>sell</mat-icon>
+        <span>Зачувај во ценовник</span>
+      </button>
+    }
     <mat-divider />
     <button mat-menu-item type="button" (click)="removeItem(index)">
       <mat-icon>delete</mat-icon>

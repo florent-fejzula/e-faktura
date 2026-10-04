@@ -1,0 +1,26 @@
+/* Layout comes from the client list's stylesheet; only the price column is new. */
+
+/* Unlike the client list's stats, the price stays visible on a phone — it is
+   the one thing a price list is opened to check. */
+.price {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-inline: 8px;
+  line-height: 1.25;
+
+  strong {
+    font: var(--mat-sys-title-small);
+  }
+
+  span {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+    white-space: nowrap;
+  }
+}
+
+.hint {
+  font: var(--mat-sys-body-small);
+}

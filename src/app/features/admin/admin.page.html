@@ -78,6 +78,13 @@
                 @if (company.email) {
                   <span class="sub">{{ company.email }}</span>
                 }
+                @if (modulesOf(company).length) {
+                  <span class="mod-chips">
+                    @for (module of modulesOf(company); track module.id) {
+                      <span class="mod-chip"><mat-icon>{{ module.icon }}</mat-icon>{{ module.name }}</span>
+                    }
+                  </span>
+                }
               </td>
               <td class="tabular muted">{{ company.taxNumber }}</td>
               <td class="num tabular">{{ company.stats?.issuedCount ?? 0 }}</td>
@@ -139,6 +146,13 @@
               {{ labels[state(company)] }}
             </span>
           </div>
+          @if (modulesOf(company).length) {
+            <span class="mod-chips">
+              @for (module of modulesOf(company); track module.id) {
+                <span class="mod-chip"><mat-icon>{{ module.icon }}</mat-icon>{{ module.name }}</span>
+              }
+            </span>
+          }
           <div class="card__meta">
             <span class="tabular">{{ company.taxNumber }}</span>
             <span>{{ company.stats?.issuedCount ?? 0 }} фактури</span>
@@ -203,6 +217,10 @@
     <button mat-menu-item type="button" (click)="extend(company, 30)">
       <mat-icon>more_time</mat-icon>
       <span>+30 дена</span>
+    </button>
+    <button mat-menu-item type="button" (click)="editModules(company)">
+      <mat-icon>extension</mat-icon>
+      <span>Модули</span>
     </button>
     <button mat-menu-item type="button" class="danger" (click)="stop(company)">
       <mat-icon>block</mat-icon>

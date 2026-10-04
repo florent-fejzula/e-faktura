@@ -1,0 +1,104 @@
+<div class="page">
+  <header class="page__head">
+    <div>
+      <h1>Ценовник</h1>
+      <p class="page__sub">{{ total() }} {{ total() === 1 ? 'ставка' : 'ставки' }}</p>
+    </div>
+    <button mat-flat-button type="button" (click)="openDialog()">
+      <mat-icon>add</mat-icon>
+      Нова ставка
+    </button>
+  </header>
+
+  @if (total() > 0) {
+    <div class="tools">
+      <mat-form-field class="tools__search no-subscript" subscriptSizing="fixed">
+        <mat-icon matPrefix>search</mat-icon>
+        <mat-label>Барај по назив или шифра</mat-label>
+        <input matInput [ngModel]="search()" (ngModelChange)="search.set($event)" />
+        @if (search()) {
+          <button matSuffix mat-icon-button type="button" (click)="search.set('')" aria-label="Исчисти">
+            <mat-icon>close</mat-icon>
+          </button>
+        }
+      </mat-form-field>
+    </div>
+  }
+
+  @if (!loading() && entries().length === 0) {
+    <div class="empty">
+      <mat-icon>sell</mat-icon>
+      @if (search()) {
+        <h2>Нема совпаѓања</h2>
+        <p>Ниту една ставка не одговара на „{{ search() }}“.</p>
+        <button mat-stroked-button type="button" (click)="search.set('')">Исчисти пребарување</button>
+      } @else {
+        <h2>Ценовникот е празен</h2>
+        <p>
+          Додајте ги производите и услугите што ги продавате. Во фактурата потоа ги бирате со
+          пишување на почетокот од називот, а цената и данокот се пополнуваат сами.
+        </p>
+        <p class="hint">
+          Може и од фактура: <strong>⋮ → Зачувај во ценовник</strong> на која било ставка.
+        </p>
+        <button mat-flat-button type="button" (click)="openDialog()">
+          <mat-icon>add</mat-icon>
+          Нова ставка
+        </button>
+      }
+    </div>
+  } @else {
+    <ul class="list">
+      @for (entry of entries(); track entry.id) {
+        <li class="item">
+          <button type="button" class="item__main" (click)="openDialog(entry)">
+            <span class="item__avatar" aria-hidden="true">{{ entry.name.charAt(0) }}</span>
+            <span class="item__body">
+              <span class="item__name">{{ entry.name }}</span>
+              <span class="item__meta">
+                <span>{{ entry.unit }}</span>
+                <span class="dot">·</span>
+                <span>{{ taxLabel(entry) }}</span>
+                @if (entry.sku) {
+                  <span class="dot">·</span>
+                  <span class="tabular">{{ entry.sku }}</span>
+                }
+              </span>
+            </span>
+          </button>
+
+          <div class="price tabular">
+            <strong>{{ entry.unitPrice | amount }}</strong>
+            <span>{{ currency() | currencySymbol }} {{ entry.priceMode === 'gross' ? 'со ДДВ' : 'без ДДВ' }}</span>
+          </div>
+
+          <div class="item__actions">
+            <button
+              mat-icon-button
+              type="button"
+              [matMenuTriggerFor]="rowMenu"
+              [matMenuTriggerData]="{ entry: entry }"
+              aria-label="Дејства"
+            >
+              <mat-icon>more_vert</mat-icon>
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</div>
+
+<mat-menu #rowMenu="matMenu">
+  <ng-template matMenuContent let-entry="entry">
+    <button mat-menu-item type="button" (click)="openDialog(entry)">
+      <mat-icon>edit</mat-icon>
+      <span>Измени</span>
+    </button>
+    <mat-divider />
+    <button mat-menu-item type="button" class="danger" (click)="remove(entry)">
+      <mat-icon>delete</mat-icon>
+      <span>Избриши</span>
+    </button>
+  </ng-template>
+</mat-menu>

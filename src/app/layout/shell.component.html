@@ -5,7 +5,7 @@
         <mat-icon>receipt_long</mat-icon>
       </a>
 
-      @for (link of nav; track link.path) {
+      @for (link of nav(); track link.path) {
         <a
           class="rail__item"
           [routerLink]="link.path"
@@ -114,7 +114,7 @@
 
     @if (isHandset()) {
       <nav class="tabbar no-print" aria-label="Главна навигација">
-        @for (link of nav; track link.path) {
+        @for (link of nav(); track link.path) {
           <a
             class="tabbar__item"
             [routerLink]="link.path"

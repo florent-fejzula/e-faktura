@@ -4,6 +4,7 @@ import {
   authGuard,
   companyGuard,
   guestGuard,
+  moduleGuard,
   onboardingGuard,
   subscriptionGuard,
 } from './core/auth/auth.guards';
@@ -57,6 +58,13 @@ export const routes: Routes = [
         title: 'Клиенти — е-Фактура',
         loadComponent: () =>
           import('./features/clients/client-list.page').then((m) => m.ClientListPage),
+      },
+      {
+        // Ценовник module — only for companies the operator switched it on for.
+        path: 'cenovnik',
+        canActivate: [moduleGuard('catalog')],
+        title: 'Ценовник — е-Фактура',
+        loadComponent: () => import('./features/catalog/catalog.page').then((m) => m.CatalogPage),
       },
       {
         path: 'admin',

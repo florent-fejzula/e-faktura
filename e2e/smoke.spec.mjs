@@ -118,6 +118,66 @@ async function tryCreateInvoice(idToken, companyId, docId) {
   return res.status;
 }
 
+/** The uid inside an ID token — enough for the emulator, no verification needed. */
+function uidOf(idToken) {
+  return JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString()).user_id;
+}
+
+/** Writes fields straight into a document as owner, bypassing the rules. */
+async function ownerPatch(path, fields) {
+  const mask = Object.keys(fields).map((f) => `updateMask.fieldPaths=${f}`).join('&');
+  const res = await fetch(`${FIRESTORE}/${path}?${mask}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+    body: JSON.stringify({ fields }),
+  });
+  return res.status;
+}
+
+/** `{ catalog: true }` as a Firestore REST map value. */
+function modulesValue(modules) {
+  return {
+    mapValue: {
+      fields: Object.fromEntries(Object.entries(modules).map(([k, v]) => [k, { booleanValue: v }])),
+    },
+  };
+}
+
+/** Tries to switch a module on as the signed-in *user* — the rules must refuse. */
+async function setModulesAs(idToken, companyId, modules) {
+  const res = await fetch(`${FIRESTORE}/companies/${companyId}?updateMask.fieldPaths=modules`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ fields: { modules: modulesValue(modules) } }),
+  });
+  return res.status;
+}
+
+/** Tries to write a price-list entry as the user, so the module switch is what decides. */
+async function tryWriteCatalog(idToken, companyId, docId) {
+  const res = await fetch(`${FIRESTORE}/companies/${companyId}/catalog?documentId=${docId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ fields: { name: { stringValue: 'probe' } } }),
+  });
+  return res.status;
+}
+
+/** Grants or revokes the operator role, the way the Firebase console does. */
+async function setAdmin(uid, on) {
+  const res = on
+    ? await fetch(`${FIRESTORE}/admins?documentId=${uid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+        body: JSON.stringify({ fields: { grantedAt: { integerValue: String(Date.now()) } } }),
+      })
+    : await fetch(`${FIRESTORE}/admins/${uid}`, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer owner' },
+      });
+  return res.status;
+}
+
 /**
  * Content wider than the viewport makes mobile browsers render a page zoomed in
  * and clipped. It is invisible on a desktop screen, so it has to be measured.
@@ -527,6 +587,139 @@ const run = async () => {
     await page.waitForTimeout(800);
     const nextNumber = (await page.locator('.preview__value').first().textContent())?.trim();
     check('the freed number is reused', nextNumber === '0001/2026', `got "${nextNumber}"`);
+
+    // --- 10b. optional modules --------------------------------------------
+    step('Modules');
+    const userToken = await idTokenFor(email, 'lozinka123');
+
+    // Off by default — and "off" has to mean more than a hidden menu entry.
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(1200);
+    check(
+      'the price list is not in the nav by default',
+      (await page.locator('a[href="/cenovnik"]').count()) === 0,
+    );
+    await open(page, `${BASE}/cenovnik`);
+    await page.waitForTimeout(1500);
+    check(
+      'its route is closed while the module is off',
+      !page.url().includes('/cenovnik'),
+      `landed on ${page.url()}`,
+    );
+    const writeWhileOff = await tryWriteCatalog(userToken, companyId, 'probe-off');
+    check('rules refuse price-list writes while off', writeWhileOff === 403, `HTTP ${writeWhileOff}`);
+    const selfEnable = await setModulesAs(userToken, companyId, { catalog: true });
+    check('a user cannot switch a module on for themselves', selfEnable === 403, `HTTP ${selfEnable}`);
+
+    // The operator switches it on from the admin screen. Company names repeat
+    // across runs in a long-lived emulator, so this run's company gets a
+    // unique e-mail to search the admin list by.
+    await ownerPatch(`companies/${companyId}`, { email: { stringValue: email } });
+    await setAdmin(uidOf(userToken), true);
+    await open(page, `${BASE}/admin`);
+    await page.waitForTimeout(2500);
+    await fillByLabel(page, 'Барај по назив или ЕДБ', email);
+    await page.waitForTimeout(500);
+    const adminRow = page.locator('table.table tbody tr');
+    check(
+      'the admin search finds exactly this company',
+      (await adminRow.count()) === 1,
+      `${await adminRow.count()} rows`,
+    );
+    await adminRow.first().locator('button[aria-label="Повеќе"]').click();
+    await page.getByRole('menuitem', { name: 'Модули' }).click();
+    const modulesDialog = page.locator('mat-dialog-container');
+    await modulesDialog.waitFor({ state: 'visible' });
+    await page.waitForTimeout(400);
+    await modulesDialog.getByRole('switch', { name: 'Ценовник' }).click();
+    await modulesDialog.getByRole('button', { name: 'Зачувај' }).click();
+    await modulesDialog.waitFor({ state: 'detached', timeout: 15000 });
+    await page.waitForTimeout(800);
+    check(
+      'the admin list shows the module on the company',
+      (await adminRow.first().locator('.mod-chip', { hasText: 'Ценовник' }).count()) === 1,
+    );
+
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(1200);
+    check(
+      'the price list appears in the nav once on',
+      (await page.locator('a[href="/cenovnik"]').count()) >= 1,
+    );
+
+    // Build the list from the price-list screen...
+    await open(page, `${BASE}/cenovnik`);
+    await page.waitForTimeout(1500);
+    check('the price list opens', page.url().includes('/cenovnik'), `landed on ${page.url()}`);
+    await page.getByRole('button', { name: 'Нова ставка' }).first().click();
+    const catalogDialog = page.locator('mat-dialog-container');
+    await catalogDialog.waitFor({ state: 'visible' });
+    await fillByLabel(catalogDialog, 'Назив', 'Печатење А4 ц/б');
+    await fillByLabel(catalogDialog, 'Цена', '5');
+    await fillByLabel(catalogDialog, 'Ед. мерка', 'лист');
+    await catalogDialog.getByRole('button', { name: 'Додади' }).click();
+    await catalogDialog.waitFor({ state: 'detached', timeout: 15000 });
+    await page.waitForTimeout(800);
+    check(
+      'a new entry is listed',
+      (await page.locator('.item__name', { hasText: 'Печатење А4 ц/б' }).count()) === 1,
+    );
+
+    // ...then pick it on an invoice line: one choice fills the whole line.
+    await open(page, `${BASE}/fakturi/nova`);
+    await page.waitForTimeout(1500);
+    const firstLine = page.locator('.item').first();
+    const description = firstLine.getByLabel('Опис', { exact: true });
+    await description.click();
+    await description.fill('печ');
+    await page.getByRole('option', { name: /Печатење А4 ц\/б/ }).click();
+    await page.waitForTimeout(400);
+    check(
+      'picking an entry fills the description',
+      (await description.inputValue()) === 'Печатење А4 ц/б',
+    );
+    check(
+      'and the unit',
+      (await firstLine.getByLabel('Ед. мерка', { exact: true }).inputValue()) === 'лист',
+    );
+    check(
+      'and the price',
+      (await firstLine.getByLabel('Цена без ДДВ', { exact: true }).inputValue()) === '5',
+    );
+
+    // A line typed by hand can be kept for next time from its menu.
+    await description.fill('Постер А3 колор');
+    await page.keyboard.press('Escape');
+    await firstLine.getByLabel('Цена без ДДВ', { exact: true }).fill('150');
+    await firstLine.locator('button[aria-label="Дејства за ставка"]').click();
+    await page.getByRole('menuitem', { name: 'Зачувај во ценовник' }).click();
+    await page.waitForTimeout(1200);
+    await open(page, `${BASE}/cenovnik`);
+    await page.waitForTimeout(1500);
+    check(
+      'a line saved from an invoice joins the list',
+      (await page.locator('.item__name', { hasText: 'Постер А3 колор' }).count()) === 1,
+    );
+
+    // Switched off again: gone from the nav, writes refused, data kept.
+    await ownerPatch(`companies/${companyId}`, { modules: modulesValue({ catalog: false }) });
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(1500);
+    check(
+      'switching it off removes the nav entry',
+      (await page.locator('a[href="/cenovnik"]').count()) === 0,
+    );
+    const writeAfterOff = await tryWriteCatalog(userToken, companyId, 'probe-after-off');
+    check('and writes are refused again', writeAfterOff === 403, `HTTP ${writeAfterOff}`);
+    const kept = await fetch(`${FIRESTORE}/companies/${companyId}/catalog`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+    }).then((r) => r.json());
+    check(
+      'the list is kept for when it is switched back on',
+      (kept.documents ?? []).length === 2,
+      `${(kept.documents ?? []).length} entries`,
+    );
+    await setAdmin(uidOf(userToken), false);
 
     // --- 11. a second company ---------------------------------------------
     step('Second company');

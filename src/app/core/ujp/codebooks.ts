@@ -245,3 +245,61 @@ export function findIndicator(set: CodebookSet, code: string): TaxIndicator | un
 export function vatImpactOf(set: CodebookSet, code: string): VatImpact {
   return findIndicator(set, code)?.vatImpact ?? 'STANDARD';
 }
+
+/** What choosing a tax indicator implies for a line: its group and its rate. */
+export interface ResolvedIndicator {
+  taxIndicator: string;
+  vatGroup: string;
+  vatRate: number;
+  /**
+   * Whether a price may be entered "with VAT". Only for standard VAT: on
+   * exempt, zero-rated and reverse-charge lines no VAT is added, so a gross
+   * price would silently mean the same as net.
+   */
+  allowsGrossPrice: boolean;
+}
+
+/**
+ * Resolves an indicator code to the group and rate it charges, so a line can
+ * never carry an indicator from one rate and a percentage from another. Exempt
+ * and zero-rated codes resolve to 0% whatever their group says.
+ *
+ * Shared by the invoice editor and the price list, which both set all three
+ * fields from a single choice.
+ */
+export function resolveIndicator(set: CodebookSet, code: string): ResolvedIndicator | null {
+  const indicator = set.taxIndicators.find((i) => i.code === code);
+  if (!indicator) return null;
+  const group = set.taxGroups.find((g) => g.code === indicator.taxGroupCode);
+  // Reverse charge keeps its rate on the line (and reports notional VAT);
+  // only exempt and zero-rated supplies drop to 0%.
+  const rated = indicator.vatImpact !== 'OSLOBODEN' && indicator.vatImpact !== 'NULA';
+  return {
+    taxIndicator: indicator.code,
+    vatGroup: indicator.taxGroupCode,
+    vatRate: rated ? (group?.percent ?? 0) : 0,
+    allowsGrossPrice: indicator.vatImpact === 'STANDARD',
+  };
+}
+
+/**
+ * Short label for a tax indicator, e.g. `ДДВ 18%` or `DDV-11-A · пренесен`.
+ * The full category name is far too long for a narrow field or a list row, but
+ * the bare code alone tells a user nothing.
+ */
+export function indicatorShortLabel(set: CodebookSet, code: string): string {
+  const indicator = set.taxIndicators.find((i) => i.code === code);
+  if (!indicator) return code;
+
+  const rate = set.taxGroups.find((g) => g.code === indicator.taxGroupCode)?.percent ?? 0;
+  switch (indicator.vatImpact) {
+    case 'STANDARD':
+      return `ДДВ ${rate}%`;
+    case 'PRENESEN':
+      return `${code} · пренесен`;
+    case 'OSLOBODEN':
+      return `${code} · ослободен`;
+    case 'NULA':
+      return `${code} · без ДДВ`;
+  }
+}

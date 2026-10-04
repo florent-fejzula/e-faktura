@@ -14,17 +14,21 @@ import { AuthService } from '../core/auth/auth.service';
 import { AdminService } from '../core/data/admin.service';
 import { CompanyService } from '../core/data/company.service';
 import { daysRemaining, subscriptionState } from '../core/models/company.model';
+import type { ModuleId } from '../core/modules/modules';
 import { RenewDialog, type RenewDialogData } from '../features/billing/renew.dialog';
 
 interface NavItem {
   path: string;
   label: string;
   icon: string;
+  /** Shown only to companies with this module switched on. */
+  module?: ModuleId;
 }
 
 const NAV: readonly NavItem[] = [
   { path: '/fakturi', label: 'Фактури', icon: 'receipt_long' },
   { path: '/klienti', label: 'Клиенти', icon: 'groups' },
+  { path: '/cenovnik', label: 'Ценовник', icon: 'sell', module: 'catalog' },
   { path: '/postavki', label: 'Поставки', icon: 'settings' },
 ];
 
@@ -58,7 +62,10 @@ export class ShellComponent {
   private readonly router = inject(Router);
   protected readonly companies = inject(CompanyService);
 
-  protected readonly nav = NAV;
+  /** The nav for the company being acted for — module entries come and go with their switch. */
+  protected readonly nav = computed(() =>
+    NAV.filter((item) => !item.module || this.companies.hasModule(item.module)),
+  );
   private readonly admin = inject(AdminService);
 
   /** Only the operator sees the subscriptions screen. */

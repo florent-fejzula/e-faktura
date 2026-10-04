@@ -99,8 +99,9 @@ src/app/
                 and the signer/transport seam
     data/       Firestore services (company, client, invoice, codebooks)
     auth/       authentication and route guards
+    modules/    the per-customer feature registry
     util/       money, dates, Macedonian number-to-words
-  features/     auth · onboarding · invoices · clients · settings · admin
+  features/     auth · onboarding · invoices · clients · catalog · settings · admin
   layout/       app shell (desktop rail / mobile tab bar)
   shared/       formatting pipes, status chip, confirm dialog
 functions/      the one Cloud Function: provisioning a customer (Admin SDK)
@@ -175,6 +176,29 @@ recently issued number rolls the company counter back in the same transaction so
 the sequence keeps no gap; removing an earlier one cannot be repaired that way
 and the confirm dialog says so. Once a document has been sent, the lawful
 correction is a storno, not an erasure.
+
+### Modules (per-customer features)
+
+Features one customer asks for and the rest do not need are **modules**: off by
+default, invisible while off, and switched on per company from **Претплати → ⋮ →
+Модули**. A module appears for that customer immediately, without a reload.
+
+- The switch is `company.modules.<id>`. Like `subscription`, the rules let only
+  the operator change it, and reject it on create — a customer cannot unlock a
+  module from the browser console.
+- A module's own data is also gated in the rules (`moduleEnabled(...)`), so "off"
+  means the writes are refused, not just that a menu entry is hidden.
+- Switching a module off keeps its data; switching it back on restores it.
+
+| Module | What the customer gets |
+| --- | --- |
+| `catalog` — **Ценовник** | A price list (`companies/{id}/catalog`). The invoice line's *Опис* field autocompletes from it, and picking an entry fills the unit, price (with or without VAT, as entered) and tax. Any line can be kept for next time with **⋮ → Зачувај во ценовник**. Lines keep their own copy, so a later price change never alters an issued invoice. |
+
+**Adding a module:** an entry in `core/modules/modules.ts` (the admin dialog
+lists it automatically), its screens behind `moduleGuard(id)` and a `module`
+entry in the shell nav, other UI behind `CompanyService.hasModule(id)`, and a
+`moduleEnabled(companyId, '<id>')` condition on any collection it owns in
+`firestore.rules`. The smoke test's *Modules* section shows how to test one.
 
 ### Three decisions worth knowing about
 

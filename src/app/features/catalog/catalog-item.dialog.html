@@ -1,0 +1,99 @@
+<h2 mat-dialog-title>{{ data.isNew ? 'Нова ставка во ценовникот' : 'Измени ставка' }}</h2>
+
+<mat-dialog-content>
+  <form [formGroup]="form" class="grid" (ngSubmit)="save()">
+    <mat-form-field class="span-2">
+      <mat-label>Назив</mat-label>
+      <input
+        matInput
+        formControlName="name"
+        [maxlength]="limits.name"
+        autocomplete="off"
+        cdkFocusInitial
+      />
+      <mat-hint>Се пренесува како опис на ставката во фактурата</mat-hint>
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <mat-error>Внесете назив.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Цена</mat-label>
+      <input
+        matInput
+        type="number"
+        inputmode="decimal"
+        step="any"
+        min="0"
+        formControlName="unitPrice"
+      />
+      @if (allowsGrossPrice()) {
+        <button
+          matSuffix
+          mat-icon-button
+          type="button"
+          (click)="togglePriceMode()"
+          [matTooltip]="
+            form.controls.priceMode.value === 'gross'
+              ? 'Цената е со ДДВ — префрли на без ДДВ'
+              : 'Цената е без ДДВ — префрли на со ДДВ'
+          "
+          aria-label="Цена со или без ДДВ"
+        >
+          <mat-icon>{{ form.controls.priceMode.value === 'gross' ? 'toggle_on' : 'toggle_off' }}</mat-icon>
+        </button>
+      }
+      <mat-hint>
+        {{ allowsGrossPrice() && form.controls.priceMode.value === 'gross' ? 'Со ДДВ' : 'Без ДДВ' }}
+      </mat-hint>
+      @if (form.controls.unitPrice.touched && form.controls.unitPrice.invalid) {
+        <mat-error>Внесете цена.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Ед. мерка</mat-label>
+      <input matInput formControlName="unit" [matAutocomplete]="unitAuto" [maxlength]="limits.unit" />
+      <mat-autocomplete #unitAuto="matAutocomplete">
+        @for (unit of units(); track unit.code) {
+          <mat-option [value]="unit.code">{{ unit.code }} — {{ unit.name }}</mat-option>
+        }
+      </mat-autocomplete>
+      @if (form.controls.unit.touched && form.controls.unit.invalid) {
+        <mat-error>Внесете единица мерка.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Данок</mat-label>
+      <mat-select formControlName="taxIndicator" [panelWidth]="null">
+        @for (indicator of indicators(); track indicator.code) {
+          <mat-option [value]="indicator.code">
+            <span class="opt-code">{{ indicator.code }}</span>
+            <span class="opt-desc">{{ indicator.categoryName }}</span>
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Шифра</mat-label>
+      <input matInput formControlName="sku" [maxlength]="limits.sku" autocomplete="off" />
+      <mat-hint>Незадолжително</mat-hint>
+    </mat-form-field>
+  </form>
+
+  @if (saveError(); as message) {
+    <p class="save-error" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ message }}</span>
+    </p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="ref.close(null)">Откажи</button>
+  <button mat-flat-button type="button" (click)="save()" [disabled]="saving()">
+    {{ data.isNew ? 'Додади' : 'Зачувај' }}
+  </button>
+</mat-dialog-actions>

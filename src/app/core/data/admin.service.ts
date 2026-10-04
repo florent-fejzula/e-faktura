@@ -14,6 +14,7 @@ import { AuthService } from '../auth/auth.service';
 import { injectFirebaseContext } from '../firebase/injection';
 import type { Company, Subscription, SubscriptionPlan } from '../models/company.model';
 import type { CreateCustomerInput, CreateCustomerResult } from '../models/provisioning.model';
+import type { CompanyModules } from '../modules/modules';
 import { addDays, todayIso } from '../util/dates';
 
 /**
@@ -108,6 +109,21 @@ export class AdminService {
     await this.inContext(() =>
       updateDoc(doc(this.firestore, 'companies', companyId), {
         subscription,
+        updatedAt: Date.now(),
+        updatedByUid: this.auth.user()?.uid ?? '',
+      }),
+    );
+  }
+
+  /**
+   * Switches optional features on or off for one company. The security rules
+   * accept this write only from the operator, so a customer cannot enable a
+   * module from the browser console.
+   */
+  async setModules(companyId: string, modules: CompanyModules): Promise<void> {
+    await this.inContext(() =>
+      updateDoc(doc(this.firestore, 'companies', companyId), {
+        modules,
         updatedAt: Date.now(),
         updatedByUid: this.auth.user()?.uid ?? '',
       }),

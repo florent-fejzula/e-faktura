@@ -26,6 +26,7 @@ import {
   subscriptionState,
 } from '../models/company.model';
 import { emptyAddress } from '../models/common.model';
+import { hasModule, type ModuleId } from '../modules/modules';
 import type { UserProfile } from '../models/user.model';
 import { injectFirebaseContext } from '../firebase/injection';
 
@@ -146,6 +147,15 @@ export class CompanyService {
     if (!company) return false;
     return !company.subscription || isSubscriptionActive(company.subscription);
   });
+
+  /**
+   * Whether an optional feature is switched on for the company being acted
+   * for. Reactive, so the nav entry and the editor's autocomplete appear the
+   * moment the operator flips the switch — no reload.
+   */
+  hasModule(id: ModuleId): boolean {
+    return hasModule(this.activeCompany()?.modules, id);
+  }
 
   /** True only once we know for certain the user has no company yet. */
   readonly needsOnboarding = computed(() => {

@@ -1,3 +1,4 @@
+import type { CompanyModules } from '../modules/modules';
 import type { Address, AuditFields, BankAccount } from './common.model';
 import { addDays, daysBetween, fromIsoDate, todayIso } from '../util/dates';
 
@@ -108,6 +109,13 @@ export interface Company extends AuditFields {
    */
   subscription?: Subscription;
   stats?: CompanyStats;
+
+  /**
+   * Optional features the operator has switched on for this company. Written
+   * only from the admin screen — the rules reject it from anyone else, the
+   * same way they protect `subscription`. See `core/modules/modules.ts`.
+   */
+  modules?: CompanyModules;
 
   ownerUid: string;
   /** Denormalised for Firestore `array-contains` security rules and queries. */

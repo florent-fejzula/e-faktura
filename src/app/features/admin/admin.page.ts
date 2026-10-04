@@ -20,6 +20,8 @@ import { formatDate, todayIso } from '../../core/util/dates';
 import { matchesSearch } from '../../core/util/id';
 import { FORMAT_PIPES } from '../../shared/format.pipes';
 import { ConfirmDialog, type ConfirmData } from '../../shared/confirm.dialog';
+import { enabledModules, type AppModule } from '../../core/modules/modules';
+import { ModulesDialog, type ModulesDialogData } from './modules.dialog';
 import { NewCustomerDialog } from './new-customer.dialog';
 
 type SortKey = 'expiry' | 'name' | 'invoices' | 'joined';
@@ -126,6 +128,20 @@ export class AdminPage {
     if (left < 0) return `пред ${Math.abs(left)} ${plural(Math.abs(left))}`;
     if (left === 0) return 'денес';
     return `за ${left} ${plural(left)}`;
+  }
+
+  /** Modules switched on for a company, for the chips under its name. */
+  protected modulesOf(company: Company): AppModule[] {
+    return enabledModules(company.modules);
+  }
+
+  protected async editModules(company: Company): Promise<void> {
+    const data: ModulesDialogData = { company };
+    const saved = await this.dialog
+      .open(ModulesDialog, { data, width: 'min(560px, 94vw)', maxWidth: 'min(560px, 94vw)' })
+      .afterClosed()
+      .toPromise();
+    if (saved) this.snackBar.open(`Модулите за ${company.name} се зачувани.`, 'Во ред');
   }
 
   protected setSort(key: SortKey): void {
