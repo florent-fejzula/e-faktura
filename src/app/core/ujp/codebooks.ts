@@ -195,6 +195,24 @@ export const SEED_UNITS: readonly UnitOfMeasure[] = [
   { code: 'проект', name: 'Проект' },
 ];
 
+/**
+ * Units to offer for what has been typed in a unit field.
+ *
+ * A field that already holds a complete unit ("ком", as it does when an entry
+ * is reopened) shows the whole list — narrowing to that one match would leave
+ * nothing to change it to. Anything else narrows by code or name.
+ */
+export function suggestUnits(
+  units: readonly UnitOfMeasure[],
+  typed: string,
+): readonly UnitOfMeasure[] {
+  const query = typed.trim().toLowerCase();
+  if (!query || units.some((u) => u.code.toLowerCase() === query)) return units;
+  return units.filter(
+    (u) => u.code.toLowerCase().includes(query) || u.name.toLowerCase().includes(query),
+  );
+}
+
 export const COUNTRY_MK = { code: 'MK', name: 'Северна Македонија' } as const;
 
 /** Everything a company needs loaded before it can edit an invoice. */

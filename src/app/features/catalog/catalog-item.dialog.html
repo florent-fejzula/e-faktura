@@ -67,6 +67,7 @@
     <mat-form-field>
       <mat-label>Данок</mat-label>
       <mat-select formControlName="taxIndicator" [panelWidth]="null">
+        <mat-select-trigger>{{ indicatorLabel() }}</mat-select-trigger>
         @for (indicator of indicators(); track indicator.code) {
           <mat-option [value]="indicator.code">
             <span class="opt-code">{{ indicator.code }}</span>

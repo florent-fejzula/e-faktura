@@ -13,7 +13,7 @@ import { CatalogService } from '../../core/data/catalog.service';
 import { CodebookService } from '../../core/data/codebook.service';
 import { CATALOG_LIMITS, type CatalogItem } from '../../core/models/catalog.model';
 import type { PriceMode } from '../../core/models/invoice.model';
-import { resolveIndicator } from '../../core/ujp/codebooks';
+import { indicatorShortLabel, resolveIndicator, suggestUnits } from '../../core/ujp/codebooks';
 
 export interface CatalogItemDialogData {
   entry: CatalogItem;
@@ -74,14 +74,10 @@ export class CatalogItemDialog {
     initialValue: this.form.controls.taxIndicator.value,
   });
 
-  /** Units narrowed by what has been typed, the way the editor's field works. */
-  protected readonly units = computed(() => {
-    const typed = (this.unitValue() ?? '').trim().toLowerCase();
-    const all = this.codebooks().units;
-    return typed
-      ? all.filter((u) => u.code.toLowerCase().includes(typed) || u.name.toLowerCase().includes(typed))
-      : all;
-  });
+  /** Units narrowed by what has been typed, but whole while a complete unit is showing. */
+  protected readonly units = computed(() =>
+    suggestUnits(this.codebooks().units, this.unitValue() ?? ''),
+  );
 
   /**
    * The common indicators, plus the entry's own if it is one of the rare ones —
@@ -92,6 +88,11 @@ export class CatalogItemDialog {
     const current = this.indicatorValue();
     return all.filter((i) => i.common || i.code === current);
   });
+
+  /** What the closed field shows: the editor's short label, not code and name run together. */
+  protected readonly indicatorLabel = computed(() =>
+    indicatorShortLabel(this.codebooks(), this.indicatorValue() ?? ''),
+  );
 
   protected readonly allowsGrossPrice = computed(
     () => resolveIndicator(this.codebooks(), this.indicatorValue() ?? '')?.allowsGrossPrice ?? false,

@@ -1,5 +1,5 @@
 import { enabledModules, hasModule } from '../modules/modules';
-import { resolveIndicator, seedCodebooks } from '../ujp/codebooks';
+import { SEED_UNITS, resolveIndicator, seedCodebooks, suggestUnits } from '../ujp/codebooks';
 import {
   CATALOG_LIMITS,
   applyCatalogItem,
@@ -143,5 +143,25 @@ describe('resolving a tax indicator', () => {
 
   it('returns nothing for an unknown code', () => {
     expect(resolveIndicator(set, 'NOPE')).toBeNull();
+  });
+});
+
+describe('suggesting units', () => {
+  it('offers every unit for an empty field', () => {
+    expect(suggestUnits(SEED_UNITS, '')).toEqual(SEED_UNITS);
+  });
+
+  it('offers every unit while a complete one is showing, as when an entry is reopened', () => {
+    expect(suggestUnits(SEED_UNITS, 'ком')).toEqual(SEED_UNITS);
+    expect(suggestUnits(SEED_UNITS, ' КОМ ')).toEqual(SEED_UNITS);
+  });
+
+  it('narrows by code or name while typing', () => {
+    expect(suggestUnits(SEED_UNITS, 'квад').map((u) => u.code)).toEqual(['м2']);
+    expect(suggestUnits(SEED_UNITS, 'кубен').map((u) => u.code)).toEqual(['м3']);
+  });
+
+  it('offers nothing for free text that matches no unit', () => {
+    expect(suggestUnits(SEED_UNITS, 'лист')).toEqual([]);
   });
 });
