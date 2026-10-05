@@ -339,16 +339,20 @@ bundled Cyrillic font to match. Once a document has been through УЈП,
 `POST /documents/sales-invoice/pdf` returns the official PDF and that becomes
 the authoritative copy.
 
-**Поставки → Печатење** sets three things per company: a logo (beside the
-company name, or centred above the header), the heading, and whose name the
-saved PDF starts with — the company's own, or the buyer's for a company filing
-its own copies. The heading is a fixed choice, Фактура or Фактура - испратница,
-not free text: it says what the document legally is, and it is print only, since
-УЈП always receives „Фактура“. Logos are documents of their own, shrunk in the
-browser to at most 960 × 320 px. An invoice stores only the logo's id, so the
-invoice list does not download a copy per invoice, and the rules refuse to
-change or delete a logo once written. The heading and logo are frozen into an
-invoice when it is issued, so reprinting an old invoice never changes it.
+**Поставки → Печатење** sets four things per company: a logo (beside the
+company name, or centred above the header), the heading, the person authorised
+to sign invoices, and whose name the saved PDF starts with — the company's own,
+or the buyer's for a company filing its own copies. The heading is a fixed
+choice, Фактура or Фактура - испратница, not free text: it says what the
+document legally is, and it is print only, since УЈП always receives „Фактура“.
+The signature line is captioned „Лице овластено за потпишување на фактури“:
+since 2016 the VAT law (чл. 53) asks for that person's name and signature in
+place of the company stamp, and the name may be printed, so it is. Logos are
+documents of their own, shrunk in the browser to at most 960 × 320 px. An
+invoice stores only the logo's id, so the invoice list does not download a copy
+per invoice, and the rules refuse to change or delete a logo once written. The
+heading, logo and signatory are frozen into an invoice when it is issued, so
+reprinting an old invoice never changes them.
 
 **Сподели** composes the covering message — number, amount, deadline, bank
 account, all in Macedonian — and hands it to a channel: `mailto:` for e-mail,

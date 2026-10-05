@@ -1,5 +1,7 @@
 import {
   PRINT_TITLES,
+  SIGNATORY_LABEL,
+  SIGNATORY_MAX_LENGTH,
   defaultCompanyDefaults,
   defaultNumbering,
   printSettings,
@@ -47,6 +49,7 @@ describe('print settings', () => {
     expect(printSettings(company())).toEqual({
       title: 'faktura',
       logoPosition: 'left',
+      signatory: '',
       fileName: 'seller',
     });
     expect(printSettings(undefined).title).toBe('faktura');
@@ -56,18 +59,31 @@ describe('print settings', () => {
     const chosen: PrintSettings = {
       title: 'faktura-ispratnica',
       logoPosition: 'center',
+      signatory: 'Петар Петровски',
       fileName: 'buyer',
     };
     expect(printSettings(company({ print: chosen }))).toEqual(chosen);
   });
 
   it('fall back field by field on a value this version does not know', () => {
-    const unknown = { title: 'profaktura', logoPosition: 'right', fileName: 'buyer' };
+    const unknown = { title: 'profaktura', logoPosition: 'right', signatory: 7, fileName: 'buyer' };
     expect(printSettings({ print: unknown as unknown as PrintSettings })).toEqual({
       title: 'faktura',
       logoPosition: 'left',
+      signatory: '',
       fileName: 'buyer',
     });
+  });
+
+  it('tidy the signatory and keep it within the field length', () => {
+    const padded = { signatory: '  Петар Петровски  ' } as PrintSettings;
+    expect(printSettings({ print: padded }).signatory).toBe('Петар Петровски');
+    const long = { signatory: 'А'.repeat(SIGNATORY_MAX_LENGTH + 20) } as PrintSettings;
+    expect(printSettings({ print: long }).signatory.length).toBe(SIGNATORY_MAX_LENGTH);
+  });
+
+  it('caption the signature line in the words of the VAT law', () => {
+    expect(SIGNATORY_LABEL).toBe('Лице овластено за потпишување на фактури');
   });
 
   it('are not fooled by a property every object has', () => {
@@ -87,16 +103,27 @@ describe('what an invoice keeps of its seller', () => {
     expect(JSON.stringify(seller)).not.toContain('data:image');
   });
 
-  it('freezes the heading and logo placement, which are part of the document', () => {
+  it('freezes the heading, logo placement and signatory, which are part of the document', () => {
     const seller = snapshotCompany(
-      company({ print: { title: 'faktura-ispratnica', logoPosition: 'center', fileName: 'buyer' } }),
+      company({
+        print: {
+          title: 'faktura-ispratnica',
+          logoPosition: 'center',
+          signatory: 'Петар Петровски',
+          fileName: 'buyer',
+        },
+      }),
     );
-    expect(seller.print).toEqual({ title: 'faktura-ispratnica', logoPosition: 'center' });
+    expect(seller.print).toEqual({
+      title: 'faktura-ispratnica',
+      logoPosition: 'center',
+      signatory: 'Петар Петровски',
+    });
   });
 
   it('leaves out the file-name preference, which is not', () => {
     const seller = snapshotCompany(
-      company({ print: { title: 'faktura', logoPosition: 'left', fileName: 'buyer' } }),
+      company({ print: { title: 'faktura', logoPosition: 'left', signatory: '', fileName: 'buyer' } }),
     );
     expect(Object.keys(seller.print ?? {})).not.toContain('fileName');
   });

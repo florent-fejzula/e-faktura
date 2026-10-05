@@ -254,7 +254,10 @@
     <footer class="signatures">
       <div>
         <div class="sig-line"></div>
-        <span>Издал</span>
+        @if (layout().signatory; as signatory) {
+          <div class="sig-name">{{ signatory }}</div>
+        }
+        <span>{{ signatoryLabel }}</span>
       </div>
       <div>
         <div class="sig-line"></div>

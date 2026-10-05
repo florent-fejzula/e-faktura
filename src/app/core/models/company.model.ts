@@ -92,10 +92,21 @@ export const PRINT_TITLES: Record<PrintTitle, string> = {
   'faktura-ispratnica': 'Фактура - испратница',
 };
 
+/**
+ * Caption under the issuer's signature line, in the words of the VAT law. Since
+ * 1 January 2016 (Закон за ДДВ, чл. 53) an invoice carries the name, surname
+ * and signature of the person authorised to sign invoices, in place of the
+ * company stamp. The name may be printed; the signature is by hand.
+ */
+export const SIGNATORY_LABEL = 'Лице овластено за потпишување на фактури';
+export const SIGNATORY_MAX_LENGTH = 80;
+
 /** How a company's invoices come out on paper and as a PDF. */
 export interface PrintSettings {
   title: PrintTitle;
   logoPosition: LogoPosition;
+  /** Name and surname printed under the signature line; empty to write it by hand. */
+  signatory: string;
   /** A preference of whoever saves the file, not part of the document. */
   fileName: PdfFileNaming;
 }
@@ -103,13 +114,14 @@ export interface PrintSettings {
 /**
  * The part of the print settings that belongs to the document, and so is
  * frozen into an invoice when it is issued — reprinting an old invoice must
- * not change its heading because the setting changed since.
+ * not change its heading, or name someone authorised only later, because the
+ * setting changed since.
  */
-export type PrintLayout = Pick<PrintSettings, 'title' | 'logoPosition'>;
+export type PrintLayout = Pick<PrintSettings, 'title' | 'logoPosition' | 'signatory'>;
 
 /** How every invoice printed before these settings existed. */
 export function defaultPrintSettings(): PrintSettings {
-  return { title: 'faktura', logoPosition: 'left', fileName: 'seller' };
+  return { title: 'faktura', logoPosition: 'left', signatory: '', fileName: 'seller' };
 }
 
 /**
@@ -130,6 +142,10 @@ export function printSettings(
       print.logoPosition === 'left' || print.logoPosition === 'center'
         ? print.logoPosition
         : defaults.logoPosition,
+    signatory:
+      typeof print.signatory === 'string'
+        ? print.signatory.trim().slice(0, SIGNATORY_MAX_LENGTH)
+        : defaults.signatory,
     fileName:
       print.fileName === 'seller' || print.fileName === 'buyer'
         ? print.fileName
@@ -319,7 +335,7 @@ export interface CompanySnapshot {
 }
 
 export function snapshotCompany(c: Company): CompanySnapshot {
-  const { title, logoPosition } = printSettings(c);
+  const { title, logoPosition, signatory } = printSettings(c);
   return {
     id: c.id,
     name: c.name,
@@ -332,6 +348,6 @@ export function snapshotCompany(c: Company): CompanySnapshot {
     phone: c.phone,
     bankAccount: c.bankAccounts.find((b) => b.isPrimary) ?? c.bankAccounts[0] ?? null,
     logoId: c.logoId ?? null,
-    print: { title, logoPosition },
+    print: { title, logoPosition, signatory },
   };
 }

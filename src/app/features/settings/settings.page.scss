@@ -327,6 +327,43 @@ mat-panel-title {
   }
 }
 
+.paper__sign {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 22px;
+
+  > div {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-width: 0;
+    text-align: center;
+  }
+
+  strong {
+    font-size: 10px;
+    overflow-wrap: anywhere;
+  }
+
+  span:not(.paper__sign-line) {
+    color: #444;
+    font-size: 8px;
+  }
+}
+
+.paper__sign-line {
+  align-self: stretch;
+  margin-bottom: 2px;
+  border-top: 1px solid #888;
+}
+
+.signatory {
+  width: 100%;
+}
+
 .print__fields {
   display: flex;
   flex-direction: column;

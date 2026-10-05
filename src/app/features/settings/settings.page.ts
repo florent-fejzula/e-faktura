@@ -30,6 +30,8 @@ import { NUMBERING_PRESETS, previewNumbering } from '../../core/data/numbering';
 import { PrintSettingsService, type LogoChange } from '../../core/data/print-settings.service';
 import {
   PRINT_TITLES,
+  SIGNATORY_LABEL,
+  SIGNATORY_MAX_LENGTH,
   SUBSCRIPTION_LABELS,
   daysRemaining,
   defaultPrintSettings,
@@ -163,9 +165,13 @@ export class SettingsPage {
 
   protected readonly printTitles = Object.entries(PRINT_TITLES) as [PrintTitle, string][];
 
+  protected readonly signatoryLabel = SIGNATORY_LABEL;
+  protected readonly signatoryMaxLength = SIGNATORY_MAX_LENGTH;
+
   protected readonly printForm = this.fb.nonNullable.group({
     title: [defaultPrintSettings().title as PrintTitle],
     logoPosition: [defaultPrintSettings().logoPosition as LogoPosition],
+    signatory: ['', Validators.maxLength(SIGNATORY_MAX_LENGTH)],
     fileName: [defaultPrintSettings().fileName as PdfFileNaming],
   });
 
@@ -431,8 +437,12 @@ export class SettingsPage {
 
   protected async savePrint(): Promise<void> {
     const company = this.company();
-    if (!company) return;
-    const settings = this.printForm.getRawValue();
+    if (!company || this.printForm.invalid) {
+      this.printForm.markAllAsTouched();
+      return;
+    }
+    const value = this.printForm.getRawValue();
+    const settings = { ...value, signatory: value.signatory.trim() };
     const logo = this.logoChange();
     await this.persist(() => this.printSettings.save(company.id, settings, logo));
   }

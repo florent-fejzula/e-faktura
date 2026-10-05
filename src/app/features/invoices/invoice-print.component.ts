@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { PrintSettingsService } from '../../core/data/print-settings.service';
 import { formatAddress } from '../../core/models/common.model';
-import { PRINT_TITLES, printSettings } from '../../core/models/company.model';
+import { PRINT_TITLES, SIGNATORY_LABEL, printSettings } from '../../core/models/company.model';
 import type { ComputedLine, Invoice, VatTotalLine } from '../../core/models/invoice.model';
 import type { InvoiceTotals } from '../../core/models/invoice.model';
 import { FORMAT_PIPES } from '../../shared/format.pipes';
@@ -44,8 +44,9 @@ export class InvoicePrintComponent {
   private readonly printSettings = inject(PrintSettingsService);
 
   protected readonly formatAddress = formatAddress;
+  protected readonly signatoryLabel = SIGNATORY_LABEL;
 
-  /** Heading and logo placement, as frozen into the seller snapshot. */
+  /** Heading, logo placement and signatory, as frozen into the seller snapshot. */
   protected readonly layout = computed(() => printSettings(this.invoice().seller));
   protected readonly title = computed(() => PRINT_TITLES[this.layout().title].toUpperCase());
 

@@ -687,6 +687,7 @@ const run = async () => {
     check('a picked logo shows in the preview before saving', await page.locator('.paper__logo').isVisible());
     await page.locator('mat-button-toggle', { hasText: 'Во средина' }).click();
     await page.getByRole('radio', { name: 'Фактура - испратница' }).check();
+    await fillByLabel(page, 'Лице овластено за потпишување на фактури', 'Петар Петровски');
     await page.getByRole('radio', { name: /Купувач и број/ }).check();
     await page.waitForTimeout(400);
     check(
@@ -732,6 +733,15 @@ const run = async () => {
     check(
       'and the logo, centred above the header',
       (await page.locator('.brand__logo').count()) === 1 && (await page.locator('.seller__logo').count()) === 0,
+    );
+    // Закон за ДДВ, чл. 53: name and signature of the person authorised to sign.
+    const signatures = (await page.locator('.signatures').innerText()).replace(/\s+/g, ' ');
+    check(
+      'the signature line names the authorised person, as the VAT law asks',
+      signatures.includes('Петар Петровски') &&
+        signatures.includes('Лице овластено за потпишување на фактури') &&
+        !signatures.includes('Издал'),
+      signatures,
     );
     const pdfName = await page.evaluate(() => {
       window.dispatchEvent(new Event('beforeprint'));

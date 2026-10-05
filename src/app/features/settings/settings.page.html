@@ -141,7 +141,7 @@
     <mat-expansion-panel>
       <mat-expansion-panel-header>
         <mat-panel-title><mat-icon>print</mat-icon> Печатење</mat-panel-title>
-        <mat-panel-description>Лого, наслов и име на PDF</mat-panel-description>
+        <mat-panel-description>Лого, наслов, потпис и име на PDF</mat-panel-description>
       </mat-expansion-panel-header>
 
       <div class="print">
@@ -165,8 +165,21 @@
               </div>
             </div>
             <div class="paper__lines"><span></span><span></span><span></span></div>
+            <div class="paper__sign">
+              <div>
+                <span class="paper__sign-line"></span>
+                @if (printValue().signatory.trim(); as signatory) {
+                  <strong>{{ signatory }}</strong>
+                }
+                <span>{{ signatoryLabel }}</span>
+              </div>
+              <div>
+                <span class="paper__sign-line"></span>
+                <span>Примил</span>
+              </div>
+            </div>
           </div>
-          <figcaption>Горниот дел од фактурата, како ќе се испечати</figcaption>
+          <figcaption>Почетокот и крајот на фактурата, како ќе се испечатат</figcaption>
         </figure>
 
         <form [formGroup]="printForm" class="print__fields">
@@ -228,6 +241,24 @@
             <p class="field-hint">
               Се менува само насловот на печатената фактура. Бројот е ист, а до УЈП секогаш оди
               како „Фактура“.
+            </p>
+          </section>
+
+          <section>
+            <h3 class="sub">Потпис</h3>
+            <mat-form-field class="signatory" subscriptSizing="dynamic">
+              <mat-label>{{ signatoryLabel }}</mat-label>
+              <input
+                matInput
+                formControlName="signatory"
+                placeholder="Име и презиме"
+                autocomplete="off"
+                [maxlength]="signatoryMaxLength"
+              />
+            </mat-form-field>
+            <p class="field-hint">
+              Законот за ДДВ бара на фактурата име, презиме и потпис на ова лице, наместо печат.
+              Името се печати под линијата за потпис, а потписот се става рачно.
             </p>
           </section>
 

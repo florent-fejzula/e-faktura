@@ -338,7 +338,8 @@
   display: flex;
   justify-content: space-between;
   gap: 40pt;
-  margin-top: 28pt;
+  /* Room above the line for a signature by hand, which the law requires. */
+  margin-top: 36pt;
   break-inside: avoid;
 
   > div {
@@ -352,6 +353,13 @@
 .sig-line {
   margin-bottom: 3pt;
   border-top: 0.75pt solid #888;
+}
+
+/* The printed name the law allows in place of a handwritten one. */
+.sig-name {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #111;
 }
 
 /*
