@@ -137,6 +137,132 @@
       </div>
     </mat-expansion-panel>
 
+    <!-- printing --------------------------------------------------------- -->
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title><mat-icon>print</mat-icon> Печатење</mat-panel-title>
+        <mat-panel-description>Лого, наслов и име на PDF</mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="print">
+        <figure class="sheet-preview">
+          <!-- Paper is white in either theme, so the preview is too. -->
+          <div class="paper" aria-hidden="true">
+            @if (logoPreview() && printValue().logoPosition === 'center') {
+              <img class="paper__brand" [src]="logoPreview()" alt="" />
+            }
+            <div class="paper__head">
+              <div class="paper__seller">
+                @if (logoPreview() && printValue().logoPosition === 'left') {
+                  <img class="paper__logo" [src]="logoPreview()" alt="" />
+                }
+                <strong>{{ company()?.name }}</strong>
+                <span>{{ previewAddress() }}</span>
+              </div>
+              <div class="paper__doc">
+                <strong class="paper__title">{{ previewTitle() }}</strong>
+                <span class="tabular">{{ numberPreview() }}</span>
+              </div>
+            </div>
+            <div class="paper__lines"><span></span><span></span><span></span></div>
+          </div>
+          <figcaption>Горниот дел од фактурата, како ќе се испечати</figcaption>
+        </figure>
+
+        <form [formGroup]="printForm" class="print__fields">
+          <section>
+            <h3 class="sub">Лого</h3>
+            <div class="logo-actions">
+              <input
+                #logoInput
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                hidden
+                (change)="pickLogo(logoInput)"
+              />
+              <button
+                mat-stroked-button
+                type="button"
+                (click)="logoInput.click()"
+                [disabled]="logoBusy()"
+              >
+                <mat-icon>upload</mat-icon>
+                {{ logoPreview() ? 'Замени лого' : 'Прикачи лого' }}
+              </button>
+              @if (logoPreview()) {
+                <button mat-button type="button" (click)="removeLogo()">Отстрани</button>
+              }
+            </div>
+            @if (logoError(); as message) {
+              <p class="field-error" role="alert">{{ message }}</p>
+            } @else {
+              <p class="field-hint">PNG, JPG, WebP или SVG. Се намалува автоматски.</p>
+            }
+
+            @if (logoPreview()) {
+              <div class="position">
+                <span id="logo-position-label">Позиција</span>
+                <mat-button-toggle-group
+                  formControlName="logoPosition"
+                  aria-labelledby="logo-position-label"
+                  hideSingleSelectionIndicator
+                >
+                  <mat-button-toggle value="left">Лево</mat-button-toggle>
+                  <mat-button-toggle value="center">Во средина</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
+            }
+          </section>
+
+          <section>
+            <h3 class="sub" id="print-title-label">Наслов на документот</h3>
+            <mat-radio-group
+              formControlName="title"
+              aria-labelledby="print-title-label"
+              class="choices"
+            >
+              @for (option of printTitles; track option[0]) {
+                <mat-radio-button [value]="option[0]">{{ option[1] }}</mat-radio-button>
+              }
+            </mat-radio-group>
+            <p class="field-hint">
+              Се менува само насловот на печатената фактура. Бројот е ист, а до УЈП секогаш оди
+              како „Фактура“.
+            </p>
+          </section>
+
+          <section>
+            <h3 class="sub" id="pdf-name-label">Име на зачуван PDF</h3>
+            <mat-radio-group
+              formControlName="fileName"
+              aria-labelledby="pdf-name-label"
+              class="choices"
+            >
+              <mat-radio-button value="seller">
+                Фирма и број
+                <span class="example">{{ fileNameExamples().seller }}.pdf</span>
+              </mat-radio-button>
+              <mat-radio-button value="buyer">
+                Купувач и број
+                <span class="example">{{ fileNameExamples().buyer }}.pdf</span>
+              </mat-radio-button>
+            </mat-radio-group>
+          </section>
+        </form>
+      </div>
+
+      <div class="actions">
+        <button
+          mat-flat-button
+          type="button"
+          (click)="savePrint()"
+          [disabled]="saving() || logoBusy()"
+        >
+          Зачувај
+        </button>
+      </div>
+    </mat-expansion-panel>
+
     <!-- numbering -------------------------------------------------------- -->
     <mat-expansion-panel>
       <mat-expansion-panel-header>

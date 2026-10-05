@@ -125,6 +125,8 @@ users/{uid}
 companies/{companyId}
 companies/{companyId}/clients/{clientId}
 companies/{companyId}/invoices/{invoiceId}
+companies/{companyId}/logos/{logoId}          written once, never changed
+companies/{companyId}/catalog/{itemId}        Ценовник module
 companies/{companyId}/settings/codebooks
 ```
 
@@ -213,7 +215,12 @@ covered by tests that reproduce УЈП's own numbers.
 
 **Invoice numbers are allocated at issue, not at creation.** A number is drawn
 inside a Firestore transaction on the company document, so simultaneous issues
-cannot collide and abandoned drafts do not leave gaps in the sequence.
+cannot collide and abandoned drafts do not leave gaps in the sequence. That is
+also what makes it free for drafts to save themselves: a new invoice takes its
+own address (`/fakturi/{id}`) on its first edit and is written a moment after
+each change, when the editor is left and when the tab is hidden, so a look at
+another screen and Back returns to it. `/fakturi/nova` and `/fakturi/:id` are
+one route, so that change of address keeps the page instead of rebuilding it.
 
 **Money formatting does not use `Intl`.** `Intl.NumberFormat('mk-MK')` silently
 falls back to `en-US` on browsers built without the `mk` CLDR data — and that
@@ -331,6 +338,17 @@ with the page's own webfont, which a client-side PDF library would need a
 bundled Cyrillic font to match. Once a document has been through УЈП,
 `POST /documents/sales-invoice/pdf` returns the official PDF and that becomes
 the authoritative copy.
+
+**Поставки → Печатење** sets three things per company: a logo (beside the
+company name, or centred above the header), the heading, and whose name the
+saved PDF starts with — the company's own, or the buyer's for a company filing
+its own copies. The heading is a fixed choice, Фактура or Фактура - испратница,
+not free text: it says what the document legally is, and it is print only, since
+УЈП always receives „Фактура“. Logos are documents of their own, shrunk in the
+browser to at most 960 × 320 px. An invoice stores only the logo's id, so the
+invoice list does not download a copy per invoice, and the rules refuse to
+change or delete a logo once written. The heading and logo are frozen into an
+invoice when it is issued, so reprinting an old invoice never changes it.
 
 **Сподели** composes the covering message — number, amount, deadline, bank
 account, all in Macedonian — and hands it to a channel: `mailto:` for e-mail,

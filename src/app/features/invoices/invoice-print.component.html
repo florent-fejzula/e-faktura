@@ -1,10 +1,15 @@
 @if (invoice(); as inv) {
   <article class="sheet">
     <!-- header --------------------------------------------------------- -->
+    @if (logoUrl() && layout().logoPosition === 'center') {
+      <div class="brand">
+        <img class="brand__logo" [src]="logoUrl()" alt="" />
+      </div>
+    }
     <header class="head">
       <div class="seller">
-        @if (inv.seller.logoDataUrl) {
-          <img class="seller__logo" [src]="inv.seller.logoDataUrl" alt="" />
+        @if (logoUrl() && layout().logoPosition === 'left') {
+          <img class="seller__logo" [src]="logoUrl()" alt="" />
         }
         <div class="seller__name">{{ inv.seller.name }}</div>
         <div class="seller__lines">
@@ -28,7 +33,9 @@
       </div>
 
       <div class="doc">
-        <h1 class="doc__title">ФАКТУРА</h1>
+        <h1 class="doc__title" [class.doc__title--long]="layout().title !== 'faktura'">
+          {{ title() }}
+        </h1>
         <div class="doc__number">{{ inv.number || 'нацрт' }}</div>
         <table class="doc__dates">
           <tbody>

@@ -216,6 +216,12 @@ export interface Invoice extends AuditFields {
 }
 
 /** A document is editable only while it is still an unissued draft. */
+/**
+ * The id segment of a new invoice's address, `/fakturi/nova`. It is replaced
+ * by the invoice's own id as soon as the invoice is first edited.
+ */
+export const NEW_INVOICE_SEGMENT = 'nova';
+
 export function isEditable(invoice: Pick<Invoice, 'status' | 'issuedAt'>): boolean {
   return invoice.status === '00' && invoice.issuedAt === null;
 }

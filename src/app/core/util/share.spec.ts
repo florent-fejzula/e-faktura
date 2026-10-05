@@ -78,6 +78,20 @@ describe('PDF file name', () => {
     const seller = { name: 'ТРГОВИЈА „СОНЦЕ“ ДОО: СКОПЈЕ', bankAccount: null };
     expect(pdfFileName(invoiceFixture({ seller }))).toBe('ТРГОВИЈА СОНЦЕ ДОО- СКОПЈЕ - 0002-2026');
   });
+
+  it('can lead with the buyer instead, for a company filing its own copies', () => {
+    expect(pdfFileName(invoiceFixture(), 'buyer')).toBe('МАИСОН ДЕ ПАРФУМ ДООЕЛ - 0002-2026');
+  });
+
+  it('makes the buyer safe for a file name the same way', () => {
+    const client = { name: 'КУПУВАЧ „Б/Ц“ ДОО', email: '', phone: '', contactPerson: '' };
+    expect(pdfFileName(invoiceFixture({ client }), 'buyer')).toBe('КУПУВАЧ Б-Ц ДОО - 0002-2026');
+  });
+
+  it('falls back to the seller while a draft has no buyer yet', () => {
+    const client = { name: '  ', email: '', phone: '', contactPerson: '' };
+    expect(pdfFileName(invoiceFixture({ client, number: '' }), 'buyer')).toBe('ДОДИ ТЕК ДООЕЛ - нацрт');
+  });
 });
 
 describe('phone normalisation', () => {

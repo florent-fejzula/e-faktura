@@ -3,7 +3,8 @@
  *
  * Drives the real app against the Firebase Emulator Suite and walks the whole
  * first-run path: register, onboard a company, add a client, build an invoice,
- * check the totals the UI shows, issue it, and confirm it lands in the list.
+ * check the totals the UI shows, issue it, and confirm it lands in the list —
+ * then drafts that save themselves, the print settings, and the modules.
  *
  * Run with the dev server on :4200 and `npm run emulators` already up:
  *   node e2e/smoke.spec.mjs
@@ -588,7 +589,192 @@ const run = async () => {
     const nextNumber = (await page.locator('.preview__value').first().textContent())?.trim();
     check('the freed number is reused', nextNumber === '0001/2026', `got "${nextNumber}"`);
 
-    // --- 10b. optional modules --------------------------------------------
+    // --- 10a. drafts save themselves --------------------------------------
+    step('Drafts');
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(1000);
+    await page.getByRole('link', { name: 'Нова фактура' }).first().click();
+    await page.waitForURL('**/fakturi/nova', { timeout: 20000 });
+    await fillByLabel(page.locator('.item').first(), 'Опис', 'Нацрт што не смее да се изгуби');
+    await fillByLabel(page.locator('.item').first(), 'Цена без ДДВ', '700');
+    const draftUrl = page.url();
+    check(
+      'a new invoice takes its own address on the first edit',
+      /\/fakturi\/[^/]+$/.test(draftUrl) && !draftUrl.endsWith('/nova'),
+      draftUrl,
+    );
+
+    // The reported bug: a quick look at another screen threw the invoice away.
+    // Left at once, well inside the autosave delay.
+    await page.locator('a[href="/klienti"]').first().click();
+    await page.waitForURL('**/klienti', { timeout: 15000 });
+    await page.goBack();
+    await page.waitForURL(draftUrl, { timeout: 15000 });
+    await page.locator('.item').first().waitFor({ timeout: 15000 });
+    await page.waitForTimeout(800);
+    check(
+      'Back from another screen returns to the invoice as it was left',
+      (await page.locator('.item').first().getByLabel('Опис', { exact: true }).inputValue()) ===
+        'Нацрт што не смее да се изгуби',
+    );
+    check(
+      'its price included',
+      (await page.locator('.item').first().getByLabel('Цена без ДДВ', { exact: true }).inputValue()) === '700',
+    );
+    // A reopened draft has nothing unsaved to report; the next edit does.
+    await fillByLabel(page.locator('.item').first(), 'Количина', '2');
+    await page.waitForTimeout(2200);
+    check(
+      'the header says when an edit is saved',
+      (await page.locator('.autosave').innerText()).includes('Зачувано'),
+    );
+
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(1200);
+    const draftRows = page.locator('.table tbody tr');
+    check(
+      'it is in the list as a draft',
+      (await draftRows.count()) === 1 && (await draftRows.first().innerText()).includes('Нацрт'),
+      `${await draftRows.count()} rows`,
+    );
+
+    // Deleting is final: an autosave still on its way must not bring it back.
+    await draftRows.first().click();
+    await page.waitForURL(draftUrl, { timeout: 15000 });
+    await page.locator('.item').first().waitFor({ timeout: 15000 });
+    await page.waitForTimeout(600);
+    await fillByLabel(page.locator('.item').first(), 'Цена без ДДВ', '800');
+    await page.locator('button[aria-label="Повеќе"]').first().click();
+    await page.getByRole('menuitem', { name: 'Избриши нацрт' }).click();
+    const draftConfirm = page.locator('mat-dialog-container');
+    await draftConfirm.waitFor({ state: 'visible' });
+    await page.waitForTimeout(400);
+    await draftConfirm.getByRole('button', { name: 'Избриши' }).click();
+    await page.waitForURL('**/fakturi', { timeout: 15000 });
+    await page.waitForTimeout(2500);
+    check(
+      'a deleted draft stays deleted',
+      await page.locator('.empty h2', { hasText: 'Сè уште нема фактури' }).isVisible(),
+    );
+
+    // --- 10b. printing ----------------------------------------------------
+    step('Printing');
+    // A wordmark-shaped logo larger than the print bounds, drawn in the page.
+    const logoPng = await page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1800;
+      canvas.height = 600;
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#c62828';
+      context.beginPath();
+      context.arc(300, 300, 240, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = '#1a237e';
+      context.font = 'bold 300px Arial';
+      context.fillText('LOGO', 600, 410);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+
+    await open(page, `${BASE}/postavki`);
+    await page.getByRole('button', { name: /Печатење/ }).click();
+    await page.waitForTimeout(600);
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'logo.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(logoPng, 'base64'),
+    });
+    await page.locator('.paper__logo').waitFor({ timeout: 10000 });
+    check('a picked logo shows in the preview before saving', await page.locator('.paper__logo').isVisible());
+    await page.locator('mat-button-toggle', { hasText: 'Во средина' }).click();
+    await page.getByRole('radio', { name: 'Фактура - испратница' }).check();
+    await page.getByRole('radio', { name: /Купувач и број/ }).check();
+    await page.waitForTimeout(400);
+    check(
+      'the preview follows the choices',
+      (await page.locator('.paper__brand').isVisible()) &&
+        (await page.locator('.paper__title').innerText()).trim() === 'ФАКТУРА - ИСПРАТНИЦА',
+    );
+    await page
+      .locator('mat-expansion-panel', { has: page.locator('.print') })
+      .getByRole('button', { name: 'Зачувај' })
+      .click();
+    await page.getByText('Зачувано.').first().waitFor({ timeout: 10000 });
+    await page.waitForTimeout(800);
+
+    const asOwner = { headers: { Authorization: 'Bearer owner' } };
+    const printedCompany = await fetch(`${FIRESTORE}/companies/${companyId}`, asOwner).then((r) => r.json());
+    const logoId = printedCompany.fields?.logoId?.stringValue;
+    check('the company points at its new logo', !!logoId);
+    const logoDoc = await fetch(`${FIRESTORE}/companies/${companyId}/logos/${logoId}`, asOwner).then((r) =>
+      r.json(),
+    );
+    check(
+      'the stored logo is a PNG shrunk to the print bounds',
+      (logoDoc.fields?.dataUrl?.stringValue ?? '').startsWith('data:image/png;base64,') &&
+        logoDoc.fields?.width?.integerValue === '960',
+      `${logoDoc.fields?.width?.integerValue}×${logoDoc.fields?.height?.integerValue}`,
+    );
+
+    // A new invoice prints with all three.
+    await page.getByRole('link', { name: 'Нова фактура' }).first().click();
+    await page.waitForURL('**/fakturi/nova', { timeout: 20000 });
+    const clientSearch = page.getByRole('combobox', { name: 'Пребарајте клиент по назив или ЕДБ' });
+    await clientSearch.focus();
+    await clientSearch.fill('КУПУВАЧ');
+    await page.getByRole('option', { name: /КУПУВАЧ ДОО/ }).click();
+    await fillByLabel(page.locator('.item').first(), 'Опис', 'Постер А2');
+    await fillByLabel(page.locator('.item').first(), 'Цена без ДДВ', '250');
+    await page.waitForTimeout(800);
+    check(
+      'the printout carries the chosen heading',
+      (await page.locator('.doc__title').innerText()).trim() === 'ФАКТУРА - ИСПРАТНИЦА',
+    );
+    check(
+      'and the logo, centred above the header',
+      (await page.locator('.brand__logo').count()) === 1 && (await page.locator('.seller__logo').count()) === 0,
+    );
+    const pdfName = await page.evaluate(() => {
+      window.dispatchEvent(new Event('beforeprint'));
+      const name = document.title;
+      window.dispatchEvent(new Event('afterprint'));
+      return name;
+    });
+    check('Save as PDF is named after the buyer', pdfName === 'КУПУВАЧ ДОО - нацрт', pdfName);
+
+    // The rules: a logo an invoice prints is never rewritten, and only a modest
+    // raster image is accepted at all.
+    const logoToken = await idTokenFor(email, 'lozinka123');
+    const asUser = (method, body) => ({
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${logoToken}` },
+      body: JSON.stringify(body),
+    });
+    const logoFields = (dataUrl) => ({
+      fields: {
+        dataUrl: { stringValue: dataUrl },
+        width: { integerValue: '1' },
+        height: { integerValue: '1' },
+        createdAt: { integerValue: '0' },
+        createdByUid: { stringValue: 'probe' },
+      },
+    });
+    const rewrite = await fetch(
+      `${FIRESTORE}/companies/${companyId}/logos/${logoId}?updateMask.fieldPaths=dataUrl`,
+      asUser('PATCH', { fields: { dataUrl: { stringValue: 'data:image/png;base64,AAAA' } } }),
+    );
+    check('a stored logo cannot be rewritten', rewrite.status === 403, `HTTP ${rewrite.status}`);
+    const svgLogo = await fetch(
+      `${FIRESTORE}/companies/${companyId}/logos?documentId=probe-svg`,
+      asUser('POST', logoFields('data:image/svg+xml;base64,PHN2Zz4=')),
+    );
+    check('an SVG logo is refused', svgLogo.status === 403, `HTTP ${svgLogo.status}`);
+    const hugeLogo = await fetch(
+      `${FIRESTORE}/companies/${companyId}/logos?documentId=probe-huge`,
+      asUser('POST', logoFields(`data:image/png;base64,${'A'.repeat(360000)}`)),
+    );
+    check('an oversized logo is refused', hugeLogo.status === 403, `HTTP ${hugeLogo.status}`);
+
+    // --- 10c. optional modules --------------------------------------------
     step('Modules');
     const userToken = await idTokenFor(email, 'lozinka123');
 

@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { ActivatedRouteSnapshot, RouterStateSnapshot, Routes } from '@angular/router';
+import { NEW_INVOICE_SEGMENT } from './core/models/invoice.model';
 import {
   adminGuard,
   authGuard,
@@ -41,15 +42,18 @@ export const routes: Routes = [
           import('./features/invoices/invoice-list.page').then((m) => m.InvoiceListPage),
       },
       {
-        path: 'fakturi/nova',
-        canActivate: [subscriptionGuard],
-        title: 'Нова фактура — е-Фактура',
-        loadComponent: () =>
-          import('./features/invoices/invoice-editor.page').then((m) => m.InvoiceEditorPage),
-      },
-      {
+        // New and existing invoices share one route on purpose. A new invoice
+        // trades `/fakturi/nova` for its own id the moment it is first edited,
+        // so Back can return to it after a look at another screen. On a
+        // separate route that change of address would tear the editor down and
+        // rebuild it under the user's cursor; on one route it is kept.
         path: 'fakturi/:id',
-        title: 'Фактура — е-Фактура',
+        canActivate: [
+          (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) =>
+            isNewInvoice(route) ? subscriptionGuard(route, state) : true,
+        ],
+        title: (route: ActivatedRouteSnapshot) =>
+          isNewInvoice(route) ? 'Нова фактура — е-Фактура' : 'Фактура — е-Фактура',
         loadComponent: () =>
           import('./features/invoices/invoice-editor.page').then((m) => m.InvoiceEditorPage),
       },
@@ -82,3 +86,8 @@ export const routes: Routes = [
   },
   { path: '**', redirectTo: '' },
 ];
+
+/** Only starting an invoice is behind the paywall; finishing a draft never is. */
+function isNewInvoice(route: ActivatedRouteSnapshot): boolean {
+  return route.paramMap.get('id') === NEW_INVOICE_SEGMENT;
+}

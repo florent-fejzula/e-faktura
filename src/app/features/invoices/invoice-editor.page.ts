@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   effect,
   inject,
@@ -39,8 +40,9 @@ import {
 } from '../../core/models/catalog.model';
 import type { Client } from '../../core/models/client.model';
 import { snapshotClient } from '../../core/models/client.model';
+import { printSettings, snapshotCompany } from '../../core/models/company.model';
 import type { Invoice, InvoiceItem, PriceMode } from '../../core/models/invoice.model';
-import { isDeletable, isEditable } from '../../core/models/invoice.model';
+import { NEW_INVOICE_SEGMENT, isDeletable, isEditable } from '../../core/models/invoice.model';
 import { indicatorShortLabel, resolveIndicator } from '../../core/ujp/codebooks';
 import { computeInvoice } from '../../core/ujp/totals';
 import { validateInvoice } from '../../core/ujp/ujp-validator';
@@ -64,6 +66,9 @@ import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
  * totals, the VAT recap, the amount in words, the validation list — is a
  * `computed` over it. Nothing is stored twice, so the totals on screen are by
  * construction the totals that get saved and the totals that get signed.
+ *
+ * A draft saves itself (see "autosave" below): looking something up on another
+ * screen and pressing Back returns to the invoice as it was left.
  */
 @Component({
   selector: 'app-invoice-editor-page',
@@ -89,10 +94,14 @@ import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './invoice-editor.page.html',
   styleUrl: './invoice-editor.page.scss',
-  // Window events rather than the Печати button, so Ctrl+P names the file too.
   host: {
+    // Window events rather than the Печати button, so Ctrl+P names the file too.
     '(window:beforeprint)': 'titleForPrint()',
     '(window:afterprint)': 'restoreTitle()',
+    // Switching to another app on a phone, or closing the tab, saves the draft
+    // there and then instead of waiting out the autosave delay.
+    '(document:visibilitychange)': 'onVisibilityChange()',
+    '(window:pagehide)': 'flushAutosave()',
   },
 })
 export class InvoiceEditorPage {
@@ -109,8 +118,12 @@ export class InvoiceEditorPage {
 
   protected readonly invoice = signal<Invoice | null>(null);
   protected readonly loading = signal(true);
+  /** An explicit save, issue or delete is running — the progress bar. */
   protected readonly saving = signal(false);
-  protected readonly dirty = signal(false);
+  /** Edits not yet handed to Firestore. */
+  private readonly dirty = signal(false);
+  /** What the header says about the draft's autosave. */
+  protected readonly saveState = signal<'idle' | 'saving' | 'saved' | 'error'>('idle');
   protected readonly showUjpDetails = signal(false);
 
   protected readonly codebooks = this.codebookService.codebooks;
@@ -257,41 +270,204 @@ export class InvoiceEditorPage {
   protected readonly paymentTypes = computed(() => this.codebooks().paymentTypes);
   protected readonly currencies = computed(() => this.codebooks().currencies);
 
-  /** Route id as a signal, so navigating between invoices reloads correctly. */
+  /** Id of the invoice in the address bar; `null` for `/fakturi/nova`. */
   private readonly routeId = toSignal(
-    this.route.paramMap.pipe(map((params) => params.get('id'))),
-    { initialValue: this.route.snapshot.paramMap.get('id') },
+    this.route.paramMap.pipe(map((params) => invoiceIdFrom(params.get('id')))),
+    { initialValue: invoiceIdFrom(this.route.snapshot.paramMap.get('id')) },
   );
+
+  /**
+   * The active company's id once it has loaded. The editor reloads when the
+   * company *changes*, not on every update to it — a colleague issuing an
+   * invoice bumps the numbering on the company document, and that must not
+   * reset a new invoice someone is halfway through.
+   */
+  private readonly companyId = computed(() => this.companies.activeCompany()?.id ?? null);
+
+  /**
+   * What the print component renders. A draft shows the company as it is now,
+   * since that is what it will be issued with; an issued invoice shows exactly
+   * what was frozen into it.
+   */
+  protected readonly printable = computed(() => {
+    const invoice = this.invoice();
+    return invoice ? this.withCurrentSeller(invoice) : null;
+  });
 
   constructor() {
     // Load the invoice named by the route, or start a fresh draft. A draft
     // handed over by "save as new" arrives in navigation state.
     effect((onCleanup) => {
-      const company = this.companies.activeCompany();
+      const companyId = this.companyId();
       const id = this.routeId();
-      if (!company) return;
+      if (!companyId) return;
+
+      // The route moved on to another invoice, or the company was switched, in
+      // the same editor (the route is shared, so the page is kept): what was
+      // typed into the one on screen is saved first.
+      const onScreen = untracked(() => this.isOnScreen(companyId, id));
+      if (!onScreen) untracked(() => void this.flushAutosave());
 
       if (!id) {
         // `history.state` is the only place the handed-over draft survives once
         // the navigation itself has finished.
-        const draft = history.state?.['draft'] as Invoice | undefined;
+        const handedOver = history.state?.['draft'] as Invoice | undefined;
         untracked(() => {
-          this.invoice.set(draft ?? this.invoiceService.createDraft(company));
-          this.dirty.set(!!draft);
+          const company = this.companies.activeCompany()!;
+          this.startEditing(handedOver ?? this.invoiceService.createDraft(company));
+          // A copy is new work the user has not saved, so it saves itself too.
+          if (handedOver) this.markEdited();
           this.loading.set(false);
         });
         return;
       }
 
-      untracked(() => this.loading.set(true));
+      // A new invoice that has just taken its own address is the invoice
+      // already on screen: no spinner, nothing to reload.
+      if (!onScreen) untracked(() => this.loading.set(true));
 
-      const subscription = this.invoiceService.watch(company.id, id).subscribe((loaded) => {
-        // A live update must not clobber edits the user has not saved yet.
-        if (!this.dirty()) this.invoice.set(loaded);
-        this.loading.set(false);
-      });
+      const subscription = this.invoiceService
+        .watch(companyId, id)
+        .subscribe((loaded) => this.receive(companyId, id, loaded));
       onCleanup(() => subscription.unsubscribe());
     });
+
+    // Leaving for another screen destroys the editor; nothing typed is lost.
+    inject(DestroyRef).onDestroy(() => void this.flushAutosave());
+  }
+
+  private isOnScreen(companyId: string, id: string | null): boolean {
+    const current = this.invoice();
+    return !!current && current.id === id && current.companyId === companyId;
+  }
+
+  /** A snapshot of the invoice the route names, from the live listener. */
+  private receive(companyId: string, id: string, loaded: Invoice | null): void {
+    if (this.isOnScreen(companyId, id)) {
+      // Keep what is on screen when the document has not been written yet (a
+      // new invoice before its first autosave), when this is our own write
+      // coming back, or while there are edits still to be saved. What is left
+      // is a change made elsewhere — another tab or device.
+      const ownEcho = loaded !== null && this.ownWrites.has(loaded.updatedAt);
+      if (loaded && !ownEcho && !this.dirty()) this.invoice.set(loaded);
+    } else {
+      this.startEditing(loaded);
+    }
+    this.loading.set(false);
+  }
+
+  private startEditing(invoice: Invoice | null): void {
+    clearTimeout(this.autosaveTimer);
+    this.dirty.set(false);
+    this.saveState.set('idle');
+    this.discarded = false;
+    this.ownWrites.clear();
+    this.invoice.set(invoice);
+  }
+
+  // --- autosave ------------------------------------------------------------
+  //
+  // A draft saves itself a moment after the last edit, when the editor is
+  // left, and when the tab is hidden. Firestore keeps writes it has not sent
+  // yet in IndexedDB, so a save handed over just as the tab closes is still
+  // delivered the next time the app opens.
+  //
+  // Drafts never take a number (that happens on issue), so saving them early
+  // costs nothing but a row in the list marked „Нацрт“.
+
+  private static readonly AUTOSAVE_DELAY_MS = 1200;
+
+  private autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Bumped by every edit, so a save can tell whether more arrived while it ran. */
+  private revision = 0;
+  /** `updatedAt` of every write made here, to tell their echoes from someone else's edit. */
+  private readonly ownWrites = new Set<number>();
+  /** The latest write still in flight. Issuing and deleting wait for it. */
+  private lastWrite: Promise<boolean> = Promise.resolve(true);
+  /** Set once the draft is deleted, so a late autosave cannot recreate it. */
+  private discarded = false;
+  /** A new invoice whose change of address is already on its way. */
+  private adopting: string | null = null;
+
+  private markEdited(): void {
+    this.revision++;
+    this.dirty.set(true);
+    this.saveState.set('saving');
+    this.adoptAddress();
+    clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(
+      () => void this.flushAutosave(),
+      InvoiceEditorPage.AUTOSAVE_DELAY_MS,
+    );
+  }
+
+  /**
+   * Gives a new invoice its own address on its first edit, so that Back from
+   * another screen returns to it. The route is shared with `/fakturi/nova`, so
+   * this changes the address bar and leaves the page as it is.
+   */
+  private adoptAddress(): void {
+    const invoice = this.invoice();
+    if (!invoice || this.routeId() === invoice.id || this.adopting === invoice.id) return;
+    this.adopting = invoice.id;
+    void this.router.navigate(['/fakturi', invoice.id], { replaceUrl: true });
+  }
+
+  /** Saves whatever has not been handed to Firestore yet. Safe to call at any time. */
+  protected flushAutosave(): Promise<boolean> {
+    clearTimeout(this.autosaveTimer);
+    const invoice = this.invoice();
+    if (!invoice || !this.dirty() || this.discarded || !isEditable(invoice)) {
+      return this.lastWrite;
+    }
+    return this.writeDraft(invoice);
+  }
+
+  protected onVisibilityChange(): void {
+    if (document.visibilityState === 'hidden') void this.flushAutosave();
+  }
+
+  /**
+   * Writes the draft. Resolves to whether it was saved; never rejects. A
+   * failure is reported here — once per run of failures for autosaves, every
+   * time for the explicit save — and the edits stay marked unsaved, so the next
+   * edit or the next flush tries again.
+   */
+  private writeDraft(invoice: Invoice, explicit = false): Promise<boolean> {
+    const revision = this.revision;
+    const finalized = this.invoiceService.finalize(this.withCurrentSeller(invoice), this.codebooks());
+    this.ownWrites.add(finalized.updatedAt);
+    this.dirty.set(false);
+    this.saveState.set('saving');
+
+    const write = this.invoiceService.write(finalized).then(
+      () => {
+        if (this.invoice()?.id === invoice.id && this.revision === revision) {
+          this.saveState.set('saved');
+        }
+        return true;
+      },
+      (error: unknown) => {
+        if (this.invoice()?.id === invoice.id) {
+          this.dirty.set(true);
+          if (explicit || this.saveState() !== 'error') {
+            this.reportError(error, 'Нацртот не е зачуван');
+          }
+          this.saveState.set('error');
+        }
+        return false;
+      },
+    );
+    this.lastWrite = write;
+    return write;
+  }
+
+  /** A draft carries the company as it is now; it is frozen only when issued. */
+  private withCurrentSeller(invoice: Invoice): Invoice {
+    const company = this.companies.activeCompany();
+    return company && company.id === invoice.companyId && isEditable(invoice)
+      ? { ...invoice, seller: snapshotCompany(company) }
+      : invoice;
   }
 
   // --- mutation helpers ----------------------------------------------------
@@ -300,7 +476,7 @@ export class InvoiceEditorPage {
     const current = this.invoice();
     if (!current) return;
     this.invoice.set({ ...current, ...changes });
-    this.dirty.set(true);
+    this.markEdited();
   }
 
   protected patchItem(index: number, changes: Partial<InvoiceItem>): void {
@@ -503,21 +679,22 @@ export class InvoiceEditorPage {
 
   // --- persistence ---------------------------------------------------------
 
+  /**
+   * The explicit save. The draft saves itself anyway; this one says so out
+   * loud, and also writes an untouched new invoice for someone who wants it
+   * in the list before filling it in.
+   */
   protected async saveDraft(): Promise<void> {
     const invoice = this.invoice();
     if (!invoice) return;
 
+    clearTimeout(this.autosaveTimer);
     this.saving.set(true);
     try {
-      const saved = await this.invoiceService.save(invoice, this.codebooks());
-      this.invoice.set(saved);
-      this.dirty.set(false);
-      this.snackBar.open('Нацртот е зачуван.', 'Во ред');
-      if (!this.route.snapshot.paramMap.get('id')) {
-        await this.router.navigate(['/fakturi', saved.id], { replaceUrl: true });
+      if (await this.writeDraft(invoice, true)) {
+        this.snackBar.open('Нацртот е зачуван.', 'Во ред');
+        this.adoptAddress();
       }
-    } catch (error) {
-      this.reportError(error);
     } finally {
       this.saving.set(false);
     }
@@ -556,9 +733,12 @@ export class InvoiceEditorPage {
 
     this.saving.set(true);
     try {
-      const issued = await this.invoiceService.issue(invoice, this.codebooks());
-      this.invoice.set(issued);
-      this.dirty.set(false);
+      // The draft's last autosave reaches the server before the transaction
+      // that freezes it, or it would arrive after and be refused.
+      await this.flushAutosave();
+
+      const issued = await this.invoiceService.issue(this.invoice() ?? invoice, this.codebooks());
+      this.startEditing(issued);
 
       if (issued.client.id) {
         await this.clientService.recordInvoice(
@@ -569,9 +749,7 @@ export class InvoiceEditorPage {
       }
 
       this.snackBar.open(`Фактура ${issued.number} е издадена.`, 'Во ред');
-      if (!this.route.snapshot.paramMap.get('id')) {
-        await this.router.navigate(['/fakturi', issued.id], { replaceUrl: true });
-      }
+      this.adoptAddress();
     } catch (error) {
       this.reportError(error);
     } finally {
@@ -579,14 +757,18 @@ export class InvoiceEditorPage {
     }
   }
 
+  /**
+   * "Save as new". The copy goes through `/fakturi/nova`, so starting one is
+   * behind the paywall like any other new invoice, and is picked up there by
+   * the load effect.
+   */
   protected async duplicate(): Promise<void> {
     const invoice = this.invoice();
     const company = this.companies.activeCompany();
     if (!invoice || !company) return;
+    await this.flushAutosave();
     const draft = this.invoiceService.duplicate(invoice, company);
-    this.dirty.set(false);
-    await this.router.navigate(['/fakturi/nova'], { state: { draft } });
-    this.invoice.set(draft);
+    await this.router.navigate(['/fakturi', NEW_INVOICE_SEGMENT], { state: { draft } });
   }
 
   protected openUjpPreview(): void {
@@ -629,6 +811,12 @@ export class InvoiceEditorPage {
 
     this.saving.set(true);
     try {
+      // Whatever is still on its way lands first, and then nothing more is
+      // written: an autosave arriving after the delete would recreate the draft.
+      await this.flushAutosave();
+      this.discarded = true;
+      clearTimeout(this.autosaveTimer);
+
       await this.invoiceService.remove(invoice);
       this.dirty.set(false);
       this.snackBar.open(
@@ -641,6 +829,7 @@ export class InvoiceEditorPage {
       );
       await this.router.navigate(['/fakturi']);
     } catch (error) {
+      this.discarded = false;
       this.reportError(error);
     } finally {
       this.saving.set(false);
@@ -681,7 +870,8 @@ export class InvoiceEditorPage {
     const invoice = this.invoice();
     if (!invoice) return;
     this.titleBeforePrint ??= this.title.getTitle();
-    this.title.setTitle(pdfFileName(invoice));
+    const naming = printSettings(this.companies.activeCompany()).fileName;
+    this.title.setTitle(pdfFileName(invoice, naming));
   }
 
   protected restoreTitle(): void {
@@ -690,11 +880,16 @@ export class InvoiceEditorPage {
     this.titleBeforePrint = null;
   }
 
-  private reportError(error: unknown): void {
+  private reportError(error: unknown, prefix = 'Грешка'): void {
     this.snackBar.open(
-      `Грешка: ${(error as Error)?.message ?? error}`,
+      `${prefix}: ${(error as Error)?.message ?? error}`,
       'Затвори',
       { duration: 8000 },
     );
   }
+}
+
+/** The invoice an address names; `/fakturi/nova` does not name one yet. */
+function invoiceIdFrom(segment: string | null): string | null {
+  return segment && segment !== NEW_INVOICE_SEGMENT ? segment : null;
 }

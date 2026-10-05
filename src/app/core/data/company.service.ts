@@ -199,7 +199,7 @@ export class CompanyService {
       phone: input.phone?.trim() ?? '',
       contactPerson: input.contactPerson?.trim() ?? '',
       bankAccounts: input.bankAccounts ?? [],
-      logoDataUrl: input.logoDataUrl ?? null,
+      logoId: null,
       numbering: input.numbering ?? defaultNumbering(),
       defaults: input.defaults ?? defaultCompanyDefaults(),
       ujp: { eujpId: '', certificateSerialNumber: '', verifiedAt: null },
@@ -257,7 +257,6 @@ export interface NewCompanyInput {
   phone?: string;
   contactPerson?: string;
   bankAccounts?: Company['bankAccounts'];
-  logoDataUrl?: string | null;
   numbering?: Company['numbering'];
   defaults?: Company['defaults'];
 }

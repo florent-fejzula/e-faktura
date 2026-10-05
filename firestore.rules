@@ -175,6 +175,24 @@ service cloud.firestore {
         allow write: if isMember(companyId) && moduleEnabled(companyId, 'catalog');
       }
 
+      // Company logos. Written once and never changed or removed: an issued
+      // invoice keeps the id of the logo it was printed with, so a new logo is
+      // a new document. Only the raster images the app itself produces are
+      // accepted, and only small ones — the app shrinks every upload well
+      // under this before writing it.
+      match /logos/{logoId} {
+        allow read: if isMember(companyId);
+        allow create: if isMember(companyId)
+          && request.resource.data.keys().hasOnly(['dataUrl', 'width', 'height', 'createdAt', 'createdByUid'])
+          && request.resource.data.dataUrl is string
+          && request.resource.data.dataUrl.size() <= 350000
+          && request.resource.data.dataUrl.split(',').size() == 2
+          && request.resource.data.dataUrl.split(',')[0] in [
+            'data:image/png;base64', 'data:image/jpeg;base64', 'data:image/webp;base64'
+          ];
+        allow update, delete: if false;
+      }
+
       // Cached UJP code lists and other per-company settings.
       match /settings/{settingId} {
         allow read, write: if isMember(companyId);

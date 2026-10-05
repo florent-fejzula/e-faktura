@@ -27,8 +27,24 @@
           @if (inv.issuedAt !== null) {
             <app-status-chip [payment]="inv.paymentStatus" />
           }
-          @if (dirty()) {
-            <span class="unsaved">Незачувани промени</span>
+          @if (editable()) {
+            @switch (saveState()) {
+              @case ('saving') {
+                <span class="autosave" role="status">Се зачувува…</span>
+              }
+              @case ('saved') {
+                <span class="autosave" role="status">
+                  <mat-icon>cloud_done</mat-icon>
+                  Зачувано
+                </span>
+              }
+              @case ('error') {
+                <span class="autosave autosave--error" role="status">
+                  <mat-icon>cloud_off</mat-icon>
+                  Не е зачувано
+                </span>
+              }
+            }
           }
         </div>
       </div>
@@ -612,7 +628,7 @@
 
   @if (totals(); as printTotals) {
     <app-invoice-print
-      [invoice]="inv"
+      [invoice]="printable() ?? inv"
       [lines]="lines()"
       [totals]="printTotals"
       [vatTotals]="vatTotals()"

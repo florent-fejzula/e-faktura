@@ -1,6 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -8,19 +18,31 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { CodebookService } from '../../core/data/codebook.service';
 import { CompanyService } from '../../core/data/company.service';
 import { NUMBERING_PRESETS, previewNumbering } from '../../core/data/numbering';
+import { PrintSettingsService, type LogoChange } from '../../core/data/print-settings.service';
 import {
+  PRINT_TITLES,
   SUBSCRIPTION_LABELS,
   daysRemaining,
+  defaultPrintSettings,
+  printSettings,
   subscriptionState,
+  type LogoPosition,
   type NumberingReset,
+  type PdfFileNaming,
+  type PrintTitle,
 } from '../../core/models/company.model';
+import { formatAddress } from '../../core/models/common.model';
+import { LogoError, prepareLogo } from '../../core/util/logo-image';
+import { composePdfFileName } from '../../core/util/share';
 import { UjpSigner, UjpTransport } from '../../core/ujp/ujp-signer';
 import { todayIso } from '../../core/util/dates';
 import { newId } from '../../core/util/id';
@@ -38,6 +60,8 @@ import { environment } from '../../../environments/environment';
     MatInputModule,
     MatSelectModule,
     MatCheckboxModule,
+    MatRadioModule,
+    MatButtonToggleModule,
     MatExpansionModule,
     MatDialogModule,
     MatDividerModule,
@@ -133,6 +157,69 @@ export class SettingsPage {
     certificateSerialNumber: [''],
   });
 
+  // --- printing ------------------------------------------------------------
+
+  private readonly printSettings = inject(PrintSettingsService);
+
+  protected readonly printTitles = Object.entries(PRINT_TITLES) as [PrintTitle, string][];
+
+  protected readonly printForm = this.fb.nonNullable.group({
+    title: [defaultPrintSettings().title as PrintTitle],
+    logoPosition: [defaultPrintSettings().logoPosition as LogoPosition],
+    fileName: [defaultPrintSettings().fileName as PdfFileNaming],
+  });
+
+  /** The form as a signal, for the preview. */
+  protected readonly printValue = toSignal(
+    this.printForm.valueChanges.pipe(map(() => this.printForm.getRawValue())),
+    { initialValue: this.printForm.getRawValue() },
+  );
+
+  /** What Зачувај will do to the logo — like every field here, nothing is written before. */
+  protected readonly logoChange = signal<LogoChange>({ kind: 'keep' });
+  protected readonly logoError = signal<string | null>(null);
+  protected readonly logoBusy = signal(false);
+  private readonly savedLogoUrl = signal<string | null>(null);
+
+  /**
+   * The saved print settings. Equal while only other fields of the company
+   * change — a colleague issuing an invoice updates the company too, and that
+   * must not throw away a logo picked here but not saved yet.
+   */
+  private readonly savedPrint = computed(
+    () => {
+      const company = this.company();
+      return company
+        ? { companyId: company.id, settings: printSettings(company), logoId: company.logoId ?? null }
+        : null;
+    },
+    { equal: (a, b) => JSON.stringify(a) === JSON.stringify(b) },
+  );
+
+  protected readonly logoPreview = computed(() => {
+    const change = this.logoChange();
+    if (change.kind === 'replace') return change.logo.dataUrl;
+    return change.kind === 'remove' ? null : this.savedLogoUrl();
+  });
+
+  protected readonly previewTitle = computed(() =>
+    PRINT_TITLES[this.printValue().title].toUpperCase(),
+  );
+
+  protected readonly previewAddress = computed(() => {
+    const company = this.company();
+    return company ? formatAddress(company.address) : '';
+  });
+
+  /** The two file names on offer, spelled out with this company's next number. */
+  protected readonly fileNameExamples = computed(() => {
+    const number = this.numberPreview();
+    return {
+      seller: composePdfFileName(this.company()?.name ?? '', number),
+      buyer: composePdfFileName('Купувач ДООЕЛ', number),
+    };
+  });
+
   private readonly numberingSource = signal(this.numberingForm.getRawValue());
 
   protected readonly numberPreview = computed(() => {
@@ -200,6 +287,28 @@ export class SettingsPage {
         eujpId: company.ujp.eujpId,
         certificateSerialNumber: company.ujp.certificateSerialNumber,
       });
+
+    });
+
+    effect((onCleanup) => {
+      const saved = this.savedPrint();
+      if (!saved) return;
+
+      untracked(() => {
+        this.printForm.reset(saved.settings);
+        this.logoChange.set({ kind: 'keep' });
+        this.logoError.set(null);
+      });
+
+      if (!saved.logoId) {
+        this.savedLogoUrl.set(null);
+        return;
+      }
+      let current = true;
+      onCleanup(() => (current = false));
+      void this.printSettings
+        .logoUrl(saved.companyId, saved.logoId)
+        .then((url) => current && this.savedLogoUrl.set(url));
     });
 
     this.numberingForm.valueChanges.subscribe(() =>
@@ -293,6 +402,39 @@ export class SettingsPage {
 
   protected applyPreset(pattern: string): void {
     this.numberingForm.controls.pattern.setValue(pattern);
+  }
+
+  /** Prepared in the browser straight away, so the preview shows the logo as it will print. */
+  protected async pickLogo(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    // Cleared so that picking the same file again still counts as a change.
+    input.value = '';
+    if (!file) return;
+
+    this.logoBusy.set(true);
+    this.logoError.set(null);
+    try {
+      this.logoChange.set({ kind: 'replace', logo: await prepareLogo(file) });
+    } catch (error) {
+      this.logoError.set(
+        error instanceof LogoError ? error.message : 'Сликата не може да се прочита.',
+      );
+    } finally {
+      this.logoBusy.set(false);
+    }
+  }
+
+  protected removeLogo(): void {
+    this.logoError.set(null);
+    this.logoChange.set({ kind: 'remove' });
+  }
+
+  protected async savePrint(): Promise<void> {
+    const company = this.company();
+    if (!company) return;
+    const settings = this.printForm.getRawValue();
+    const logo = this.logoChange();
+    await this.persist(() => this.printSettings.save(company.id, settings, logo));
   }
 
   private async persist(action: () => Promise<void>): Promise<void> {

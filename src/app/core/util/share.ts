@@ -1,3 +1,4 @@
+import type { PdfFileNaming } from '../models/company.model';
 import type { Invoice } from '../models/invoice.model';
 import { formatDate } from './dates';
 import { formatAmount } from './money';
@@ -16,19 +17,30 @@ import { formatAmount } from './money';
 /**
  * What "Save as PDF" names the file: `ДОДИ ТЕК ДООЕЛ - 0002-2026`.
  *
+ * Whose name comes first is the company's choice (Поставки → Печатење). The
+ * company's own name suits whoever receives the file; the buyer's suits a
+ * company filing its own copies, where its own name on every file tells it
+ * nothing. A draft with no buyer yet falls back to the company's name.
+ *
  * Browsers take the default file name from the page title, so the editor puts
- * this in the title for the duration of the print. The slash in the invoice
+ * this in the title for the duration of the print.
+ */
+export function pdfFileName(invoice: Invoice, naming: PdfFileNaming = 'seller'): string {
+  const buyer = invoice.client.name.trim();
+  return composePdfFileName(naming === 'buyer' && buyer ? buyer : invoice.seller.name, invoice.number);
+}
+
+/**
+ * `<name> - <number>`, made safe for a file name. The slash in the invoice
  * number becomes a hyphen, and so does anything else Windows refuses in a file
  * name — left in, the browser substitutes its own character or cuts the name
  * short at that point. Quotes around a trading name („...“) are dropped, not
  * replaced, because a hyphen there reads as a separator.
  */
-export function pdfFileName(invoice: Invoice): string {
-  const seller = invoice.seller.name
-    .replace(/["„“”«»]/g, '')
-    .replace(/[\\/:*?<>|]/g, '-');
-  const number = (invoice.number || 'нацрт').replace(/[\\/:*?"<>|]/g, '-');
-  return `${seller} - ${number}`.replace(/\s+/g, ' ').trim();
+export function composePdfFileName(name: string, number: string): string {
+  const party = name.replace(/["„“”«»]/g, '').replace(/[\\/:*?<>|]/g, '-');
+  const safeNumber = (number || 'нацрт').replace(/[\\/:*?"<>|]/g, '-');
+  return `${party} - ${safeNumber}`.replace(/\s+/g, ' ').trim();
 }
 
 /** Subject line for the e-mail channel. */

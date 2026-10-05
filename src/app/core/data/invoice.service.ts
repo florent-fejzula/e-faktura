@@ -217,11 +217,20 @@ export class InvoiceService {
 
   async save(invoice: Invoice, codebooks: CodebookSet): Promise<Invoice> {
     const finalized = this.finalize(invoice, codebooks);
+    await this.write(finalized);
+    return finalized;
+  }
+
+  /**
+   * Writes an already finalized invoice. Separate from `save` for the editor's
+   * autosave, which needs to know exactly what it wrote (its `updatedAt`)
+   * before the write comes back, to recognise its own echo in the live listener.
+   */
+  async write(finalized: Invoice): Promise<void> {
     const { id, ...data } = finalized;
     await this.inContext(() =>
-      setDoc(doc(this.firestore, this.path(invoice.companyId), id), data, { merge: true }),
+      setDoc(doc(this.firestore, this.path(finalized.companyId), id), data, { merge: true }),
     );
-    return finalized;
   }
 
   /**
@@ -246,12 +255,16 @@ export class InvoiceService {
         const companySnap = await tx.get(companyRef);
         if (!companySnap.exists()) throw new Error('Компанијата не постои.');
 
-        const company = companySnap.data() as Company;
+        const company = { ...companySnap.data(), id: companySnap.id } as Company;
         const assigned = nextInvoiceNumber(company.numbering, invoice.issueDate);
 
         const numbered = this.finalize(
           {
             ...invoice,
+            // Frozen here, as the company is at the moment of issue — a draft
+            // started before a new address, account or logo still goes out
+            // with the current one.
+            seller: snapshotCompany(company),
             number: assigned.number,
             seq: assigned.seq,
             periodKey: assigned.periodKey,

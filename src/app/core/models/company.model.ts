@@ -76,6 +76,67 @@ export function defaultCompanyDefaults(): CompanyDefaults {
   };
 }
 
+/**
+ * Heading of the printed document. A fixed list rather than free text: the
+ * heading says what the document legally is, and a field that accepted
+ * "ПРОФАКТУРА" would let a numbered tax invoice call itself something else.
+ * Print only — УЈП always receives `docTypeName` „Фактура“.
+ */
+export type PrintTitle = 'faktura' | 'faktura-ispratnica';
+export type LogoPosition = 'left' | 'center';
+/** Whose name "Save as PDF" puts first: the company's own, or the buyer's. */
+export type PdfFileNaming = 'seller' | 'buyer';
+
+export const PRINT_TITLES: Record<PrintTitle, string> = {
+  faktura: 'Фактура',
+  'faktura-ispratnica': 'Фактура - испратница',
+};
+
+/** How a company's invoices come out on paper and as a PDF. */
+export interface PrintSettings {
+  title: PrintTitle;
+  logoPosition: LogoPosition;
+  /** A preference of whoever saves the file, not part of the document. */
+  fileName: PdfFileNaming;
+}
+
+/**
+ * The part of the print settings that belongs to the document, and so is
+ * frozen into an invoice when it is issued — reprinting an old invoice must
+ * not change its heading because the setting changed since.
+ */
+export type PrintLayout = Pick<PrintSettings, 'title' | 'logoPosition'>;
+
+/** How every invoice printed before these settings existed. */
+export function defaultPrintSettings(): PrintSettings {
+  return { title: 'faktura', logoPosition: 'left', fileName: 'seller' };
+}
+
+/**
+ * Settings for a company or an invoice's seller snapshot, defaults filled in.
+ * Companies that never opened the settings, and invoices issued before they
+ * existed, have no `print` at all; an unknown value (written by a newer
+ * version of the app) falls back too, rather than printing a blank heading.
+ */
+export function printSettings(
+  source: { print?: Partial<PrintSettings> | null } | null | undefined,
+): PrintSettings {
+  const defaults = defaultPrintSettings();
+  const print = source?.print ?? {};
+  return {
+    // `hasOwn`, not `in`: "toString" is "in" every object.
+    title: print.title && Object.hasOwn(PRINT_TITLES, print.title) ? print.title : defaults.title,
+    logoPosition:
+      print.logoPosition === 'left' || print.logoPosition === 'center'
+        ? print.logoPosition
+        : defaults.logoPosition,
+    fileName:
+      print.fileName === 'seller' || print.fileName === 'buyer'
+        ? print.fileName
+        : defaults.fileName,
+  };
+}
+
 export interface Company extends AuditFields {
   id: string;
 
@@ -95,7 +156,15 @@ export interface Company extends AuditFields {
   contactPerson: string;
 
   bankAccounts: BankAccount[];
-  logoDataUrl: string | null;
+
+  /**
+   * The current logo, a document under `companies/{id}/logos`. The image is
+   * kept out of this document and out of the invoices: an invoice stores only
+   * the id, so a year of invoices does not download a year of copies of it.
+   */
+  logoId?: string | null;
+  /** Absent until first saved; read it through `printSettings()`. */
+  print?: PrintSettings;
 
   numbering: NumberingConfig;
   defaults: CompanyDefaults;
@@ -244,10 +313,13 @@ export interface CompanySnapshot {
   email: string;
   phone: string;
   bankAccount: BankAccount | null;
-  logoDataUrl: string | null;
+  /** Optional: invoices issued before logos existed have neither field. */
+  logoId?: string | null;
+  print?: PrintLayout;
 }
 
 export function snapshotCompany(c: Company): CompanySnapshot {
+  const { title, logoPosition } = printSettings(c);
   return {
     id: c.id,
     name: c.name,
@@ -259,6 +331,7 @@ export function snapshotCompany(c: Company): CompanySnapshot {
     email: c.email,
     phone: c.phone,
     bankAccount: c.bankAccounts.find((b) => b.isPrimary) ?? c.bankAccounts[0] ?? null,
-    logoDataUrl: c.logoDataUrl,
+    logoId: c.logoId ?? null,
+    print: { title, logoPosition },
   };
 }

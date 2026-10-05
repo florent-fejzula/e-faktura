@@ -266,7 +266,7 @@ export const createCustomer = onCall(
 
       batch.set(companyRef, {
         ...input.company,
-        logoDataUrl: null,
+        logoId: null,
         numbering: defaultNumbering(),
         defaults: defaultCompanyDefaults(),
         ujp: { eujpId: '', certificateSerialNumber: '', verifiedAt: null },
