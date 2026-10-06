@@ -395,7 +395,13 @@ away an invoice being edited.
 **Cache headers matter.** In `firebase.json` only the content-hashed bundles
 (`main-*.js`, `chunk-*.js`, …) are cached for a year. `index.html`,
 `ngsw-worker.js`, `ngsw.json` and the manifest are `no-cache`: a broader
-`*.js` rule would have pinned the service worker itself for a year.
+`*.js` rule would have pinned the service worker itself for a year. So is every
+app address (`/`, `/fakturi`, `/fakturi/{id}` — the regex `^/[^.]*$`, any path
+without a dot). Those are served `index.html` through the rewrite, but header
+rules match the address requested rather than the file served, so the
+`index.html` rule alone missed them and they got Hosting's default of an hour —
+long enough for a browser without the service worker to load a page that
+points at bundles the next deploy had already removed.
 
 **Google sign-in on iOS.** An app added to the home screen on iPhone runs in its
 own sandbox, where Firebase's sign-in pop-up is known to be unreliable. E-mail
