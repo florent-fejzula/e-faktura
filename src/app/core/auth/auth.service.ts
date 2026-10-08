@@ -1,13 +1,16 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import {
   Auth,
+  EmailAuthProvider,
   GoogleAuthProvider,
   User,
   createUserWithEmailAndPassword,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  updatePassword,
   updateProfile,
   user,
 } from '@angular/fire/auth';
@@ -81,6 +84,40 @@ export class AuthService {
   }
 
   /**
+   * Whether this account signs in with a password at all. Someone who signs in
+   * with Google has none to change — their password is Google's.
+   */
+  readonly hasPassword = computed(
+    () => this.user()?.providerData.some((p) => p.providerId === 'password') ?? false,
+  );
+
+  /**
+   * Changes the signed-in user's password.
+   *
+   * Firebase refuses a password change from a session that is not recent, and
+   * a customer handed a password by the operator may well have been signed in
+   * for days. So the current password is asked for every time and used to
+   * re-authenticate first — which also means a phone left unlocked on a desk
+   * cannot be used to lock the owner out of their own account.
+   *
+   * Resolves to `null` on success, or the message to show.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<string | null> {
+    const account = this.auth.currentUser;
+    if (!account?.email) return 'Не сте најавени.';
+    try {
+      await reauthenticateWithCredential(
+        account,
+        EmailAuthProvider.credential(account.email, currentPassword),
+      );
+      await updatePassword(account, newPassword);
+      return null;
+    } catch (error) {
+      return describePasswordChangeError(error);
+    }
+  }
+
+  /**
    * Signs out, and waits for the app to actually believe it.
    *
    * Firebase resolves `signOut` before the auth-state observable emits, so for
@@ -150,6 +187,33 @@ export class AuthService {
     }
   }
 }
+
+/**
+ * The same, for changing a password while signed in. A wrong password here is
+ * the *current* one — „погрешна е-пошта или лозинка“ would send the person off
+ * to check an e-mail address they never typed.
+ */
+export function describePasswordChangeError(error: unknown): string {
+  const code = (error as { code?: string })?.code ?? '';
+  switch (code) {
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'Тековната лозинка не е точна.';
+    case 'auth/weak-password':
+      return `Новата лозинка е прекратка — потребни се најмалку ${MIN_PASSWORD_LENGTH} знаци.`;
+    case 'auth/too-many-requests':
+      return 'Премногу погрешни обиди. Почекајте неколку минути и пробајте повторно.';
+    case 'auth/requires-recent-login':
+      return 'Одјавете се, најавете се повторно и пробајте пак.';
+    case 'auth/network-request-failed':
+      return 'Нема врска со серверот. Проверете го интернетот.';
+    default:
+      return describeAuthError(error);
+  }
+}
+
+/** What Firebase Auth accepts; a shorter password is refused by the server. */
+export const MIN_PASSWORD_LENGTH = 6;
 
 /** Turns a Firebase auth error code into something a user can act on. */
 export function describeAuthError(error: unknown): string {

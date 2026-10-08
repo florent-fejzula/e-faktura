@@ -169,6 +169,12 @@
       <span>Претплати</span>
     </a>
   }
+  @if (hasPassword()) {
+    <button mat-menu-item type="button" (click)="changePassword()">
+      <mat-icon>key</mat-icon>
+      <span>Промени лозинка</span>
+    </button>
+  }
   <button mat-menu-item type="button" (click)="signOut()">
     <mat-icon>logout</mat-icon>
     <span>Одјава</span>

@@ -201,6 +201,15 @@ const run = async () => {
   });
   page.on('pageerror', (error) => consoleErrors.push(String(error)));
 
+  // The browser logs every failed request as a console error with no URL. The
+  // Password step deliberately sends a wrong password, so one 400 from the
+  // sign-in endpoint is expected — recorded here so that is the *only* kind of
+  // 400 the Console check lets through.
+  const failedRequests = [];
+  page.on('response', (response) => {
+    if (response.status() >= 400) failedRequests.push(`${response.status()} ${response.url()}`);
+  });
+
   try {
     // --- 1. register -------------------------------------------------------
     step('Registration');
@@ -960,6 +969,60 @@ const run = async () => {
     );
     await page.keyboard.press('Escape');
 
+    // --- 11b. changing the password ----------------------------------------
+    step('Password');
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(1000);
+    await page.locator('button[aria-label="Сметка"]').first().click();
+    await page.getByRole('menuitem', { name: 'Промени лозинка' }).click();
+    const pwDialog = page.locator('mat-dialog-container');
+    await pwDialog.waitFor({ state: 'visible' });
+    await page.waitForTimeout(400);
+
+    // The customer was handed a password; replacing it must be safe to attempt.
+    await fillByLabel(pwDialog, 'Тековна лозинка', 'погрешна-лозинка');
+    await fillByLabel(pwDialog, 'Нова лозинка', 'novaLozinka456');
+    await fillByLabel(pwDialog, 'Повторете ја новата лозинка', 'novaLozinka456');
+    await pwDialog.getByRole('button', { name: 'Промени лозинка' }).click();
+    await pwDialog.locator('.error').waitFor({ timeout: 15000 });
+    check(
+      'a wrong current password is refused, in plain words',
+      (await pwDialog.locator('.error').innerText()).includes('Тековната лозинка не е точна'),
+    );
+
+    await fillByLabel(pwDialog, 'Тековна лозинка', 'lozinka123');
+    await fillByLabel(pwDialog, 'Повторете ја новата лозинка', 'различна456');
+    await pwDialog.getByRole('button', { name: 'Промени лозинка' }).click();
+    await page.waitForTimeout(300);
+    check(
+      'two different new passwords are caught before anything is sent',
+      (await pwDialog.locator('mat-error').allInnerTexts()).some((t) => t.includes('не се исти')),
+    );
+
+    await fillByLabel(pwDialog, 'Нова лозинка', 'abc');
+    await fillByLabel(pwDialog, 'Повторете ја новата лозинка', 'abc');
+    await pwDialog.getByRole('button', { name: 'Промени лозинка' }).click();
+    await page.waitForTimeout(300);
+    check(
+      'a too-short password is caught too',
+      (await pwDialog.locator('mat-error').allInnerTexts()).some((t) => t.includes('прекратка')),
+    );
+
+    await fillByLabel(pwDialog, 'Нова лозинка', 'novaLozinka456');
+    await fillByLabel(pwDialog, 'Повторете ја новата лозинка', 'novaLozinka456');
+    await pwDialog.getByRole('button', { name: 'Промени лозинка' }).click();
+    await pwDialog.waitFor({ state: 'detached', timeout: 15000 });
+    await page.getByText('Лозинката е променета.').first().waitFor({ timeout: 10000 });
+    check('the right current password changes it', true);
+    check(
+      'the old password no longer signs in',
+      !(await idTokenFor(email, 'lozinka123')),
+    );
+    check(
+      'the new one does',
+      !!(await idTokenFor(email, 'novaLozinka456')),
+    );
+
     // --- 12. sign out ------------------------------------------------------
     step('Sign out');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -998,13 +1061,28 @@ const run = async () => {
 
     // --- console -----------------------------------------------------------
     step('Console');
+    const unexpectedFailures = failedRequests.filter(
+      (r) => !(r.startsWith('400 ') && r.includes('accounts:signInWithPassword')),
+    );
+    const expectedFailures = failedRequests.length - unexpectedFailures.length;
     const realErrors = consoleErrors.filter(
       (e) =>
         !e.includes('favicon') &&
         !e.includes('Download the React DevTools') &&
-        !e.toLowerCase().includes('font'),
+        !e.toLowerCase().includes('font') &&
+        // Only the deliberate wrong-password request(s), never an unexplained 400.
+        !(
+          expectedFailures > 0 &&
+          unexpectedFailures.length === 0 &&
+          e.includes('status of 400')
+        ),
     );
     check('no console errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
+    check(
+      'the only failed request was the deliberate wrong password',
+      unexpectedFailures.length === 0,
+      unexpectedFailures.slice(0, 3).join(' | '),
+    );
   } catch (error) {
     failures++;
     results.push(`\n  FAIL  exception: ${error?.message ?? error}`);

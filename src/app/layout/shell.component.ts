@@ -118,6 +118,15 @@ export class ShellComponent {
 
   protected readonly user = this.auth.user;
 
+  /** Accounts that sign in with Google have no password here to change. */
+  protected readonly hasPassword = this.auth.hasPassword;
+
+  protected async changePassword(): Promise<void> {
+    // Loaded on demand: most sessions never open it.
+    const { ChangePasswordDialog } = await import('../features/account/change-password.dialog');
+    this.dialog.open(ChangePasswordDialog, { maxWidth: '94vw', autoFocus: 'first-tabbable' });
+  }
+
   protected readonly initials = computed(() => {
     const account = this.user();
     const source = account?.displayName || account?.email || '';

@@ -54,6 +54,12 @@ app can read it, so if it is lost the customer uses **Заборавена ло�
 the login screen. Self-registration still works alongside this, and still opens
 a 30-day trial.
 
+The customer can replace the password you gave them: avatar menu →
+**Промени лозинка**. It asks for the current password every time (Firebase only
+accepts a change from a freshly confirmed session, and it stops an unlocked
+phone being used to lock the owner out). The entry is hidden for accounts that
+sign in with Google, which have no password here to change.
+
 This runs as a Cloud Function rather than in the browser for one reason:
 `createUserWithEmailAndPassword` replaces the *caller's* session with the new
 account, so doing it client-side would sign you out of the admin screen and into
