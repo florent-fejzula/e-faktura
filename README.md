@@ -52,7 +52,8 @@ The password is shown once, on the panel that appears after the account is
 created, together with a ready-to-send message. It is never stored anywhere this
 app can read it, so if it is lost the customer uses **Заборавена лозинка?** on
 the login screen. Self-registration still works alongside this, and still opens
-a 30-day trial.
+a 30-day trial — once per ЕДБ. A customer who started a trial is renewed from
+the list; provisioning their ЕДБ again is refused.
 
 The customer can replace the password you gave them: avatar menu →
 **Промени лозинка**. It asks for the current password every time (Firebase only
@@ -120,7 +121,8 @@ A user can act for more than one company — an accountant, or an owner with two
 entities. **Нова фирма** in the company switcher reruns the setup wizard with
 `?nova=1`, which is the only way past the guard that otherwise keeps someone
 with a company from re-running onboarding. Each company carries its own clients,
-numbering and subscription.
+numbering and subscription — and its own ЕДБ: a second company with an ЕДБ
+already on the app is refused (see *Subscriptions*).
 
 ### Data model
 
@@ -134,6 +136,7 @@ companies/{companyId}/invoices/{invoiceId}
 companies/{companyId}/logos/{logoId}          written once, never changed
 companies/{companyId}/catalog/{itemId}        Ценовник module
 companies/{companyId}/settings/codebooks
+taxNumbers/{taxNumber}                        claim: one company per ЕДБ
 ```
 
 Access to a company is decided by its `memberUids` array, and invoices live
@@ -159,6 +162,26 @@ Two rules carry it:
   printing, exporting, and finishing an existing draft all keep working, because
   the records belong to the customer and North Macedonia requires them to be
   retained. The end-to-end test asserts this rather than trusting it.
+
+The subscription is sold **per ЕДБ**, and two more rules keep it that way:
+
+- The ЕДБ is fixed once the company exists. The company update rule rejects a
+  changed `taxNumber` from anyone but the operator, so one paid company cannot be
+  renamed into the next business and the next. The name stays editable —
+  companies do legally rename — and Поставки shows the ЕДБ read-only with a way
+  to ask for a correction. The operator fixes a typo from the admin screen
+  (**Промени ЕДБ**), which moves the claim below in the same transaction.
+- One company, and so one trial, per ЕДБ. `taxNumbers/{ЕДБ}` holds a claim
+  (`{ companyId }`), and the rules accept a new company only in the same batch
+  that claims its ЕДБ. Writing to a claimed ЕДБ is an update, which no client
+  may make, so a second company with that ЕДБ is refused — from onboarding,
+  **Нова фирма** or a second account alike. `createCustomer` checks and claims
+  it too. Claims are unreadable to customers; whether an ЕДБ is on the app is
+  not theirs to probe.
+
+Companies created before claims existed have none. The admin screen claims their
+ЕДБs by itself whenever it is opened (oldest first, where two already share one),
+so **open `/admin` once after deploying this**.
 
 A company created before subscriptions existed carries no such field. That reads
 as *grandfathered*, not *lapsed* — in the rules and in the UI — and the app

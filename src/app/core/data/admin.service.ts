@@ -1,4 +1,4 @@
-import { Injectable, computed, inject } from '@angular/core';
+import { Injectable, computed, effect, inject } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
   Firestore,
@@ -6,6 +6,7 @@ import {
   collectionData,
   doc,
   docData,
+  runTransaction,
   updateDoc,
 } from '@angular/fire/firestore';
 import { Functions, httpsCallable } from '@angular/fire/functions';
@@ -80,6 +81,99 @@ export class AdminService {
     if (!list) return list ?? undefined;
     return [...list].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
   });
+
+  /** ЕДБ claims (`taxNumbers/{ЕДБ}`), readable only by the operator. */
+  private readonly claims = toSignal(
+    toObservable(this.isAdmin).pipe(
+      switchMap((isAdmin) => {
+        if (!isAdmin) return of(undefined);
+        return this.inContext(
+          () =>
+            collectionData(collection(this.firestore, 'taxNumbers'), {
+              idField: 'id',
+            }) as Observable<{ id: string }[]>,
+        );
+      }),
+    ),
+    { initialValue: undefined },
+  );
+
+  /**
+   * Claims the ЕДБ of every company created before claims existed.
+   *
+   * Until a company's ЕДБ is claimed, anyone can register it again and get a
+   * fresh trial, so this runs whenever the operator opens the admin screen
+   * rather than waiting to be remembered. Oldest first: where two companies
+   * already share an ЕДБ, the original keeps it. Each claim is a transaction
+   * that reads the server, not the offline cache, so a stale snapshot cannot
+   * overwrite a claim made elsewhere in the meantime.
+   */
+  private readonly attemptedClaims = new Set<string>();
+  private readonly claimLegacyTaxNumbers = effect(() => {
+    const companies = this.allCompanies();
+    const claims = this.claims();
+    if (!companies || !claims) return;
+
+    const claimed = new Set(claims.map((c) => c.id));
+    const missing = [...companies]
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+      .filter((c) => /^\d{13}$/.test(c.taxNumber ?? '') && !claimed.has(c.taxNumber))
+      .filter((c) => !this.attemptedClaims.has(c.taxNumber));
+
+    for (const company of missing) {
+      this.attemptedClaims.add(company.taxNumber);
+      void this.inContext(() =>
+        runTransaction(this.firestore, async (tx) => {
+          const ref = doc(this.firestore, 'taxNumbers', company.taxNumber);
+          if ((await tx.get(ref)).exists()) return;
+          tx.set(ref, { companyId: company.id, createdAt: Date.now() });
+        }),
+      ).catch(() => {
+        // Retried on the next visit to the admin screen.
+        this.attemptedClaims.delete(company.taxNumber);
+      });
+    }
+  });
+
+  /**
+   * Corrects a company's ЕДБ — the one way it changes, since customers cannot.
+   *
+   * Moves the claim with it, in one transaction: an ЕДБ another company holds
+   * is refused, and the old one is released, as it was never really theirs. A
+   * ДДВ број that was the old ЕДБ with МК in front follows along. Issued
+   * invoices keep the ЕДБ they were issued with.
+   */
+  async changeTaxNumber(company: Company, taxNumber: string): Promise<void> {
+    const next = taxNumber.trim();
+    if (!/^\d{13}$/.test(next)) throw new Error('ЕДБ мора да има точно 13 цифри.');
+    if (next === company.taxNumber) return;
+
+    await this.inContext(() =>
+      runTransaction(this.firestore, async (tx) => {
+        const nextRef = doc(this.firestore, 'taxNumbers', next);
+        const prevRef = /^\d{13}$/.test(company.taxNumber ?? '')
+          ? doc(this.firestore, 'taxNumbers', company.taxNumber)
+          : null;
+
+        const taken = await tx.get(nextRef);
+        const previous = prevRef ? await tx.get(prevRef) : null;
+        if (taken.exists() && taken.data()['companyId'] !== company.id) {
+          throw new Error(`ЕДБ ${next} веќе го користи друга фирма.`);
+        }
+
+        tx.set(nextRef, { companyId: company.id, createdAt: Date.now() });
+        if (prevRef && previous?.exists() && previous.data()['companyId'] === company.id) {
+          tx.delete(prevRef);
+        }
+        tx.update(doc(this.firestore, 'companies', company.id), {
+          taxNumber: next,
+          ...(company.vatNumber === `МК${company.taxNumber}` ? { vatNumber: `МК${next}` } : {}),
+          updatedAt: Date.now(),
+          updatedByUid: this.auth.user()?.uid ?? '',
+        });
+      }),
+    );
+  }
 
   /**
    * Moves the paid-through date.

@@ -2,7 +2,6 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
   Firestore,
-  addDoc,
   arrayUnion,
   collection,
   collectionData,
@@ -13,6 +12,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from '@angular/fire/firestore';
 import { Observable, of, switchMap } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
@@ -29,6 +29,7 @@ import { emptyAddress } from '../models/common.model';
 import { hasModule, type ModuleId } from '../modules/modules';
 import type { UserProfile } from '../models/user.model';
 import { injectFirebaseContext } from '../firebase/injection';
+import { environment } from '../../../environments/environment';
 
 const ACTIVE_COMPANY_KEY = 'efaktura.activeCompanyId';
 
@@ -182,15 +183,21 @@ export class CompanyService {
   /**
    * Creates a company and links it to the current user in one go — the two
    * writes have to agree, or the user ends up with a company they cannot see.
+   *
+   * The company claims its ЕДБ under `taxNumbers` in the same batch, and the
+   * rules accept the company only together with that claim. An ЕДБ already on
+   * the app — someone else's, or this user's own company again for a second
+   * trial — fails the whole batch.
    */
   async create(input: NewCompanyInput): Promise<string> {
     const user = this.auth.user();
     if (!user) throw new Error('Не сте најавени.');
 
     const now = Date.now();
+    const taxNumber = input.taxNumber.trim();
     const company: Omit<Company, 'id'> = {
       name: input.name.trim(),
-      taxNumber: input.taxNumber.trim(),
+      taxNumber,
       vatNumber: input.vatNumber?.trim() ?? '',
       isVatRegistered: input.isVatRegistered,
       registrationNumber: input.registrationNumber?.trim() ?? '',
@@ -214,9 +221,28 @@ export class CompanyService {
       updatedByUid: user.uid,
     };
 
-    const ref = await this.inContext(() =>
-      addDoc(collection(this.firestore, 'companies'), company),
-    );
+    const ref = this.inContext(() => doc(collection(this.firestore, 'companies')));
+    try {
+      await this.inContext(() => {
+        const batch = writeBatch(this.firestore);
+        batch.set(ref, company);
+        batch.set(doc(this.firestore, 'taxNumbers', taxNumber), {
+          companyId: ref.id,
+          createdAt: now,
+        });
+        return batch.commit();
+      });
+    } catch (error) {
+      // The claim is unreadable from here, so the refusal is the only signal —
+      // and for a well-formed company it has no other cause.
+      if ((error as { code?: string })?.code === 'permission-denied') {
+        throw new Error(
+          `Фирма со ЕДБ ${taxNumber} веќе е регистрирана. ` +
+            `Ако е ваша, пишете ни на ${environment.billing.contactEmail}.`,
+        );
+      }
+      throw error;
+    }
 
     await this.inContext(() =>
       setDoc(

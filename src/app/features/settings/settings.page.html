@@ -66,10 +66,11 @@
 
         <mat-form-field>
           <mat-label>ЕДБ</mat-label>
-          <input matInput formControlName="taxNumber" inputmode="numeric" maxlength="13" />
-          @if (form.controls.taxNumber.touched && form.controls.taxNumber.invalid) {
-            <mat-error>13 цифри.</mat-error>
-          }
+          <input matInput formControlName="taxNumber" readonly />
+          <mat-icon matSuffix>lock</mat-icon>
+          <mat-hint
+            >Не се менува. За исправка <a [href]="'mailto:' + contactEmail">пишете ни</a>.</mat-hint
+          >
         </mat-form-field>
 
         <mat-form-field>

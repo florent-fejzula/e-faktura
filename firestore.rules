@@ -63,6 +63,15 @@ service cloud.firestore {
       return request.resource.data.get('modules', null) == resource.data.get('modules', null);
     }
 
+    // ЕДБ is the company's identity, and the subscription is sold per ЕДБ. An
+    // owner who could rewrite it could run any number of businesses on one
+    // payment, one after another, so it is fixed once the company exists and
+    // only the operator corrects it. The name stays editable: companies do
+    // legally rename, and a new name on the same ЕДБ is still the same payer.
+    function taxNumberUnchanged() {
+      return request.resource.data.get('taxNumber', null) == resource.data.get('taxNumber', null);
+    }
+
     // A module's own data is writable only while the module is on — the switch
     // is enforced here, not just by hiding a menu entry.
     function moduleEnabled(companyId, module) {
@@ -115,23 +124,30 @@ service cloud.firestore {
       // The creator must be the owner and the sole initial member, so a user
       // cannot mint a company that grants themselves access to someone else's.
       // The opening trial is written here and is the only subscription value a
-      // client is ever allowed to set.
+      // client is ever allowed to set — and only once per ЕДБ: the same write
+      // must claim the ЕДБ under /taxNumbers, which fails if it is taken.
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.memberUids.hasOnly([request.auth.uid])
         && request.resource.data.memberUids.hasAll([request.auth.uid])
         && request.resource.data.subscription.plan == 'trial'
-        && !('modules' in request.resource.data);
+        && !('modules' in request.resource.data)
+        && request.resource.data.taxNumber is string
+        && request.resource.data.taxNumber.matches('^[0-9]{13}$')
+        && getAfter(
+          /databases/$(database)/documents/taxNumbers/$(request.resource.data.taxNumber)
+        ).data.companyId == companyId;
 
       // Ownership cannot be reassigned by an update, only the owner may change
       // the member list, and a normal user may not move the subscription —
       // otherwise anyone could grant themselves another decade from the browser
-      // console. It changes only through the admin screen.
+      // console. It changes only through the admin screen, and so does the ЕДБ.
       allow update: if isAdmin() || (
         isMember(companyId)
         && request.resource.data.ownerUid == resource.data.ownerUid
         && subscriptionUnchangedOrFirstSet()
         && modulesUnchanged()
+        && taxNumberUnchanged()
         && (
           request.resource.data.memberUids == resource.data.memberUids
           || request.auth.uid == resource.data.ownerUid
@@ -197,6 +213,33 @@ service cloud.firestore {
       match /settings/{settingId} {
         allow read, write: if isMember(companyId);
       }
+    }
+
+    // One company — and so one trial — per ЕДБ. Document id is the ЕДБ, and a
+    // company claims it in the same batch that creates it. The claim cannot be
+    // taken over: writing to an ЕДБ that already has one is an update, which no
+    // client may make, so a second company with that ЕДБ is refused whether it
+    // comes from onboarding, "Нова фирма" or a second account.
+    //
+    // Unreadable to customers. Whether an ЕДБ is on the app is the operator's
+    // business, not something to probe for from the browser console.
+    match /taxNumbers/{taxNumber} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || (
+        signedIn()
+        && request.resource.data.keys().hasOnly(['companyId', 'createdAt'])
+        && request.resource.data.companyId is string
+        // Only alongside the company's own creation, never for one that
+        // already exists — those are claimed from the admin screen.
+        && !exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId))
+        && request.auth.uid in getAfter(
+          /databases/$(database)/documents/companies/$(request.resource.data.companyId)
+        ).data.memberUids
+        && getAfter(
+          /databases/$(database)/documents/companies/$(request.resource.data.companyId)
+        ).data.taxNumber == taxNumber
+      );
+      allow update, delete: if isAdmin();
     }
 
     // Anything not matched above is denied.

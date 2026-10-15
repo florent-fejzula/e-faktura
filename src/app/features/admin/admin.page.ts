@@ -23,6 +23,7 @@ import { ConfirmDialog, type ConfirmData } from '../../shared/confirm.dialog';
 import { enabledModules, type AppModule } from '../../core/modules/modules';
 import { ModulesDialog, type ModulesDialogData } from './modules.dialog';
 import { NewCustomerDialog } from './new-customer.dialog';
+import { TaxNumberDialog, type TaxNumberDialogData } from './tax-number.dialog';
 
 type SortKey = 'expiry' | 'name' | 'invoices' | 'joined';
 
@@ -142,6 +143,15 @@ export class AdminPage {
       .afterClosed()
       .toPromise();
     if (saved) this.snackBar.open(`Модулите за ${company.name} се зачувани.`, 'Во ред');
+  }
+
+  protected async editTaxNumber(company: Company): Promise<void> {
+    const data: TaxNumberDialogData = { company };
+    const saved = await this.dialog
+      .open(TaxNumberDialog, { data, width: 'min(480px, 94vw)', maxWidth: 'min(480px, 94vw)' })
+      .afterClosed()
+      .toPromise();
+    if (saved) this.snackBar.open(`ЕДБ на ${company.name} е променет.`, 'Во ред');
   }
 
   protected setSort(key: SortKey): void {

@@ -236,6 +236,19 @@ export const createCustomer = onCall(
 
     const input = validate(request.data);
 
+    // One company per ЕДБ, the same as the rules enforce for self-service. A
+    // customer already on the app — usually someone who started a trial — is
+    // renewed from the list rather than provisioned a second time. Checked
+    // before the auth account exists so a refusal leaves nothing to roll back;
+    // `batch.create` below is what actually holds under a race.
+    const taxNumberRef = getFirestore().doc(`taxNumbers/${input.company.taxNumber}`);
+    if ((await taxNumberRef.get()).exists) {
+      throw new HttpsError(
+        'already-exists',
+        `Фирма со ЕДБ ${input.company.taxNumber} веќе постои. Продолжете ја нејзината претплата од листата.`,
+      );
+    }
+
     let uid: string;
     try {
       const user = await getAuth().createUser({
@@ -280,6 +293,10 @@ export const createCustomer = onCall(
         createdByUid: callerUid,
         updatedByUid: callerUid,
       });
+
+      // `create`, not `set`: fails the batch if the ЕДБ was claimed since the
+      // check above, rather than handing this company someone else's claim.
+      batch.create(taxNumberRef, { companyId: companyRef.id, createdAt: now });
 
       // Written here rather than left to `AuthService.ensureProfile` on first
       // sign-in, because that path creates the profile with no default company

@@ -88,6 +88,7 @@ export class SettingsPage {
   protected readonly transportStatus = this.transport.status();
   protected readonly ujpEnvironment = environment.ujp.environment;
   protected readonly ujpApiBaseUrl = environment.ujp.apiBaseUrl;
+  protected readonly contactEmail = environment.billing.contactEmail;
 
   protected readonly company = this.companies.activeCompany;
 
@@ -122,7 +123,10 @@ export class SettingsPage {
 
   protected readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(80)]],
-    taxNumber: ['', [Validators.required, Validators.pattern(/^\d{13}$/)]],
+    // Shown, never saved: the rules refuse a changed ЕДБ from anyone but the
+    // operator. No validators either, so an old company with a malformed one
+    // can still save everything else.
+    taxNumber: [''],
     vatNumber: [''],
     registrationNumber: [''],
     isVatRegistered: [true],
@@ -335,7 +339,6 @@ export class SettingsPage {
     await this.persist(() =>
       this.companies.update(company.id, {
         name: v.name,
-        taxNumber: v.taxNumber,
         vatNumber: v.vatNumber,
         registrationNumber: v.registrationNumber,
         isVatRegistered: v.isVatRegistered,

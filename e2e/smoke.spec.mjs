@@ -214,6 +214,11 @@ const run = async () => {
     // --- 1. register -------------------------------------------------------
     step('Registration');
     const email = `test-${Date.now()}@efaktura.local`;
+    // The rules allow one company per ЕДБ and a long-lived emulator keeps every
+    // run's companies, so each run needs ЕДБs of its own.
+    const runDigits = String(Date.now()).slice(-9);
+    const edb = `4030${runDigits}`;
+    const secondEdb = `4057${runDigits}`;
     await open(page, `${BASE}/najava`);
 
     check('login page renders', await page.locator('h1', { hasText: 'е-Фактура' }).isVisible());
@@ -230,7 +235,7 @@ const run = async () => {
     // --- 2. onboarding -----------------------------------------------------
     step('Onboarding');
     await fillByLabel(page, 'Назив на фирма', 'ТЕСТ КОМПАНИЈА ДООЕЛ СКОПЈЕ');
-    await fillByLabel(page, 'ЕДБ (даночен број)', '4030995135699');
+    await fillByLabel(page, 'ЕДБ (даночен број)', edb);
     await page.getByRole('button', { name: 'Продолжи' }).click();
 
     await fillByLabel(page, 'Улица', 'Орце Николов');
@@ -315,7 +320,7 @@ const run = async () => {
     check('payload docType is 100', payload?.document?.header?.docType === '100');
     check(
       'seller VAT number carries the Cyrillic МК prefix',
-      payload?.document?.seller?.sellerVatNumber === 'МК4030995135699',
+      payload?.document?.seller?.sellerVatNumber === `МК${edb}`,
       `got "${payload?.document?.seller?.sellerVatNumber}"`,
     );
     check(
@@ -540,6 +545,75 @@ const run = async () => {
       `HTTP ${selfGrant.status}`,
     );
 
+    // Nor turn a paid company into a different one: the ЕДБ is fixed, so a
+    // rename is still the same payer.
+    const asToken = (method, body) => ({
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    const retax = await fetch(
+      `${FIRESTORE}/companies/${companyId}?updateMask.fieldPaths=taxNumber`,
+      asToken('PATCH', { fields: { taxNumber: { stringValue: secondEdb } } }),
+    );
+    check('a user cannot change their own ЕДБ', retax.status === 403, `HTTP ${retax.status}`);
+    const rename = await fetch(
+      `${FIRESTORE}/companies/${companyId}?updateMask.fieldPaths=name`,
+      asToken('PATCH', { fields: { name: { stringValue: 'ТЕСТ КОМПАНИЈА ДООЕЛ СКОПЈЕ' } } }),
+    );
+    check('the name stays editable', rename.status === 200, `HTTP ${rename.status}`);
+
+    const claim = await fetch(`${FIRESTORE}/taxNumbers/${edb}`, {
+      headers: { Authorization: 'Bearer owner' },
+    }).then((res) => res.json());
+    check(
+      'onboarding claimed the ЕДБ for this company',
+      claim.fields?.companyId?.stringValue === companyId,
+      JSON.stringify(claim.fields ?? claim.error ?? {}),
+    );
+    const peek = await fetch(`${FIRESTORE}/taxNumbers/${edb}`, asToken('GET'));
+    check('ЕДБ claims are unreadable to customers', peek.status === 403, `HTTP ${peek.status}`);
+
+    // The claim is not optional, and cannot be made on the side.
+    const unclaimed = await fetch(
+      `${FIRESTORE}/companies?documentId=probe-unclaimed-${runDigits}`,
+      asToken('POST', {
+        fields: {
+          ownerUid: { stringValue: uidOf(idToken) },
+          memberUids: { arrayValue: { values: [{ stringValue: uidOf(idToken) }] } },
+          taxNumber: { stringValue: `4099${runDigits}` },
+          subscription: {
+            mapValue: {
+              fields: {
+                paidUntil: { stringValue: '2099-01-01' },
+                plan: { stringValue: 'trial' },
+                note: { stringValue: '' },
+              },
+            },
+          },
+        },
+      }),
+    );
+    check(
+      'a company cannot be created without claiming its ЕДБ',
+      unclaimed.status === 403,
+      `HTTP ${unclaimed.status}`,
+    );
+    const sideClaim = await fetch(
+      `${FIRESTORE}/taxNumbers?documentId=4098${runDigits}`,
+      asToken('POST', {
+        fields: {
+          companyId: { stringValue: companyId },
+          createdAt: { integerValue: String(Date.now()) },
+        },
+      }),
+    );
+    check(
+      'an existing company cannot claim another ЕДБ',
+      sideClaim.status === 403,
+      `HTTP ${sideClaim.status}`,
+    );
+
     // An expired banner that does not say how to pay is a dead end.
     await page.getByRole('button', { name: 'Обнови претплата' }).click();
     const renew = page.locator('mat-dialog-container');
@@ -548,7 +622,7 @@ const run = async () => {
     const renewText = (await renew.innerText()).replace(/\s+/g, ' ');
     check('the renewal dialog names a price', renewText.includes('6.000 ден.'), renewText.slice(0, 80));
     check('it gives an account to pay into', renewText.includes('200004007076491'));
-    check('it gives a payment reference', renewText.includes('4030995135699'));
+    check('it gives a payment reference', renewText.includes(edb));
     check('it offers a way to reach a human', renewText.includes('@'));
     check(
       'requesting an invoice is the primary action',
@@ -820,6 +894,29 @@ const run = async () => {
     // across runs in a long-lived emulator, so this run's company gets a
     // unique e-mail to search the admin list by.
     await ownerPatch(`companies/${companyId}`, { email: { stringValue: email } });
+
+    // A company from before ЕДБ claims existed. Until something claims its ЕДБ,
+    // anyone could register that ЕДБ again for a fresh trial.
+    const legacyId = `legacy-${runDigits}`;
+    const legacyEdb = `4097${runDigits}`;
+    // Not containing this run's e-mail, which the admin search below looks for.
+    const legacyEmail = `old-${runDigits}@efaktura.local`;
+    await fetch(`${FIRESTORE}/companies?documentId=${legacyId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({
+        fields: {
+          name: { stringValue: 'СТАРА ФИРМА ДООЕЛ' },
+          taxNumber: { stringValue: legacyEdb },
+          vatNumber: { stringValue: `МК${legacyEdb}` },
+          email: { stringValue: legacyEmail },
+          ownerUid: { stringValue: 'nobody' },
+          memberUids: { arrayValue: { values: [] } },
+          createdAt: { integerValue: '1' },
+        },
+      }),
+    });
+
     await setAdmin(uidOf(userToken), true);
     await open(page, `${BASE}/admin`);
     await page.waitForTimeout(2500);
@@ -843,6 +940,63 @@ const run = async () => {
     check(
       'the admin list shows the module on the company',
       (await adminRow.first().locator('.mod-chip', { hasText: 'Ценовник' }).count()) === 1,
+    );
+
+    const readClaim = (taxNumber) =>
+      fetch(`${FIRESTORE}/taxNumbers/${taxNumber}`, {
+        headers: { Authorization: 'Bearer owner' },
+      }).then((res) => (res.status === 200 ? res.json() : null));
+    check(
+      'the admin screen claims an older company’s ЕДБ by itself',
+      (await readClaim(legacyEdb))?.fields?.companyId?.stringValue === legacyId,
+    );
+
+    // Correcting an ЕДБ is the operator's job. One held by another company is
+    // refused; a free one moves the claim and releases the old number.
+    await fillByLabel(page, 'Барај по назив или ЕДБ', legacyEmail);
+    await page.waitForTimeout(500);
+    const openTaxDialog = async () => {
+      await adminRow.first().locator('button[aria-label="Повеќе"]').click();
+      await page.getByRole('menuitem', { name: 'Промени ЕДБ' }).click();
+      const dialog = page.locator('mat-dialog-container');
+      await dialog.waitFor({ state: 'visible' });
+      await page.waitForTimeout(300);
+      return dialog;
+    };
+    let taxDialog = await openTaxDialog();
+    await fillByLabel(taxDialog, 'ЕДБ', edb);
+    await taxDialog.getByRole('button', { name: 'Зачувај' }).click();
+    await taxDialog.locator('.error').waitFor({ timeout: 15000 }).catch(() => {});
+    check(
+      'an ЕДБ another company holds is refused',
+      (await taxDialog.locator('.error').count()) === 1 &&
+        (await taxDialog.locator('.error').innerText()).includes('друга фирма'),
+    );
+    await taxDialog.getByRole('button', { name: 'Откажи' }).click();
+    await taxDialog.waitFor({ state: 'detached' });
+
+    const correctedEdb = `4096${runDigits}`;
+    taxDialog = await openTaxDialog();
+    await fillByLabel(taxDialog, 'ЕДБ', correctedEdb);
+    await taxDialog.getByRole('button', { name: 'Зачувај' }).click();
+    await taxDialog.waitFor({ state: 'detached', timeout: 15000 });
+    const corrected = await fetch(`${FIRESTORE}/companies/${legacyId}`, {
+      headers: { Authorization: 'Bearer owner' },
+    }).then((res) => res.json());
+    check(
+      'the operator can correct an ЕДБ',
+      corrected.fields?.taxNumber?.stringValue === correctedEdb,
+      corrected.fields?.taxNumber?.stringValue,
+    );
+    check(
+      'the ДДВ број follows it',
+      corrected.fields?.vatNumber?.stringValue === `МК${correctedEdb}`,
+      corrected.fields?.vatNumber?.stringValue,
+    );
+    check(
+      'the claim moves with it',
+      (await readClaim(correctedEdb))?.fields?.companyId?.stringValue === legacyId &&
+        (await readClaim(legacyEdb)) === null,
     );
 
     await open(page, `${BASE}/fakturi`);
@@ -941,13 +1095,47 @@ const run = async () => {
       (await page.locator('.wizard__header h1').textContent())?.includes('Нова фирма'),
     );
 
+    // The first company's ЕДБ again — the "rename and keep going" trick, and a
+    // second trial for the same business. Refused by the rules, explained in
+    // the UI, and nothing is left half-created.
     await fillByLabel(page, 'Назив на фирма', 'ВТОРА ФИРМА ДООЕЛ');
-    await fillByLabel(page, 'ЕДБ (даночен број)', '4057015512345');
+    await fillByLabel(page, 'ЕДБ (даночен број)', edb);
     await page.getByRole('button', { name: 'Продолжи' }).click();
     await fillByLabel(page, 'Улица', 'Македонија');
     await fillByLabel(page, 'Број', '5');
     await fillByLabel(page, 'Поштенски број', '1000');
     await fillByLabel(page, 'Град', 'Скопје');
+    await page.getByRole('button', { name: 'Продолжи' }).click();
+    await page.getByRole('button', { name: 'Зачувај фирма' }).click();
+    const duplicateNotice = page
+      .locator('.mat-mdc-snack-bar-label', { hasText: 'веќе е регистрирана' })
+      .last();
+    await duplicateNotice.waitFor({ timeout: 15000 }).catch(() => {});
+    check('an ЕДБ already on the app is refused, in plain words', await duplicateNotice.isVisible());
+    check('the wizard stays open after the refusal', page.url().includes('/registracija'), page.url());
+    const holders = await fetch(`${FIRESTORE}:runQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'companies' }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'taxNumber' },
+              op: 'EQUAL',
+              value: { stringValue: edb },
+            },
+          },
+        },
+      }),
+    }).then((res) => res.json());
+    const holderCount = holders.filter((row) => row.document).length;
+    check('the refused company was not created', holderCount === 1, `${holderCount} companies`);
+
+    await page.getByRole('button', { name: 'Назад' }).click();
+    await page.getByRole('button', { name: 'Назад' }).click();
+    await fillByLabel(page, 'ЕДБ (даночен број)', secondEdb);
+    await page.getByRole('button', { name: 'Продолжи' }).click();
     await page.getByRole('button', { name: 'Продолжи' }).click();
     await page.getByRole('button', { name: 'Зачувај фирма' }).click();
 

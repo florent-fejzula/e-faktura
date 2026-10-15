@@ -75,7 +75,8 @@ try {
   await shot(page, '02-onboarding-step1');
 
   await fill(page, 'Назив на фирма', 'ПРОФИНГ ИНЖЕНЕРИНГ ДООЕЛ СКОПЈЕ');
-  await fill(page, 'ЕДБ (даночен број)', '4030995135699');
+  // One company per ЕДБ, and the emulator keeps every run's companies.
+  await fill(page, 'ЕДБ (даночен број)', `4030${String(Date.now()).slice(-9)}`);
   await fill(page, 'ЕМБС (матичен број)', '6612345');
   await page.getByRole('button', { name: 'Продолжи' }).click();
   await fill(page, 'Улица', 'Орце Николов');
