@@ -162,6 +162,6 @@ describe('suggesting units', () => {
   });
 
   it('offers nothing for free text that matches no unit', () => {
-    expect(suggestUnits(SEED_UNITS, 'лист')).toEqual([]);
+    expect(suggestUnits(SEED_UNITS, 'туба')).toEqual([]);
   });
 });

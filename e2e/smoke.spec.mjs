@@ -1015,7 +1015,10 @@ const run = async () => {
     await catalogDialog.waitFor({ state: 'visible' });
     await fillByLabel(catalogDialog, 'Назив', 'Печатење А4 ц/б');
     await fillByLabel(catalogDialog, 'Цена', '5');
-    await fillByLabel(catalogDialog, 'Ед. мерка', 'лист');
+    // Typed in part and picked from the suggestions, the way a print shop
+    // would reach its own unit.
+    await fillByLabel(catalogDialog, 'Ед. мерка', 'лис');
+    await page.getByRole('option', { name: 'лист — Лист' }).click();
     await catalogDialog.getByRole('button', { name: 'Додади' }).click();
     await catalogDialog.waitFor({ state: 'detached', timeout: 15000 });
     await page.waitForTimeout(800);

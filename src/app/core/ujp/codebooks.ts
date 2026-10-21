@@ -191,6 +191,9 @@ export const SEED_UNITS: readonly UnitOfMeasure[] = [
   { code: 'км', name: 'Километар' },
   { code: 'пар', name: 'Пар' },
   { code: 'пак', name: 'Пакување' },
+  // Print and copy shops: priced per sheet, paper sold by the ream.
+  { code: 'лист', name: 'Лист' },
+  { code: 'топ', name: 'Топ хартија' },
   { code: 'сет', name: 'Сет' },
   { code: 'проект', name: 'Проект' },
 ];
