@@ -620,7 +620,7 @@ const run = async () => {
     await renew.waitFor({ state: 'visible' });
     await page.waitForTimeout(400);
     const renewText = (await renew.innerText()).replace(/\s+/g, ' ');
-    check('the renewal dialog names a price', renewText.includes('6.000 ден.'), renewText.slice(0, 80));
+    check('the renewal dialog names a price', renewText.includes('6.150 ден.'), renewText.slice(0, 80));
     check('it gives an account to pay into', renewText.includes('200004007076491'));
     check('it gives a payment reference', renewText.includes(edb));
     check('it offers a way to reach a human', renewText.includes('@'));

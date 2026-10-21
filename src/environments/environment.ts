@@ -33,7 +33,7 @@ export const environment: AppEnvironment = {
     bankAccount: '200004007076491',
     contactEmail: 'fejzula.florent@gmail.com',
     contactPhone: '+389 70 302 376',
-    annualPrice: '6.000 ден.',
+    annualPrice: '6.150 ден.',
     monthlyPrice: '600 ден.',
     priceNote: 'без ДДВ',
   },

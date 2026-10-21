@@ -46,7 +46,7 @@ export interface BillingConfig {
   bankAccount: string;
   contactEmail: string;
   contactPhone: string;
-  /** Headline price, already formatted, e.g. `6.000 ден.` */
+  /** Headline price, already formatted, e.g. `6.150 ден.` */
   annualPrice: string;
   monthlyPrice: string;
   /** Shown under the price, e.g. "без ДДВ" or "со вклучен ДДВ". */
