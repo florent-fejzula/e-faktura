@@ -5,6 +5,8 @@ import {
   collectionData,
   doc,
   docData,
+  getDocs,
+  limit,
   orderBy,
   query,
   runTransaction,
@@ -15,7 +17,7 @@ import {
 import { Observable, map, of } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import type { Client, ClientSnapshot } from '../models/client.model';
-import type { Company } from '../models/company.model';
+import type { Company, NumberingReset } from '../models/company.model';
 import { snapshotClient } from '../models/client.model';
 import { snapshotCompany } from '../models/company.model';
 import { emptyAddress } from '../models/common.model';
@@ -26,7 +28,7 @@ import { amountInWordsMk } from '../util/amount-in-words';
 import { addDays, monthOf, skopjeToday, todayIso, yearOf, type IsoDate } from '../util/dates';
 import { newId, normalizeForSearch } from '../util/id';
 import { round2 } from '../util/money';
-import { nextInvoiceNumber } from './numbering';
+import { highestSeqInPeriod, nextInvoiceNumber } from './numbering';
 import { injectFirebaseContext } from '../firebase/injection';
 
 /**
@@ -239,6 +241,14 @@ export class InvoiceService {
    * The sequence lives on the company document and is read *and* written
    * inside a transaction, so two users issuing simultaneously get different
    * numbers rather than a duplicate.
+   *
+   * The counter alone does not make a number unique, though: an invoice dated
+   * into an earlier month, or a counter set back in Поставки, can bring round a
+   * number that is already out. So the number is looked up before it is used,
+   * and an invoice that would repeat one is refused rather than issued. The
+   * lookup is not part of the transaction, but it does not need to be — every
+   * numbered invoice is written by this transaction, which also moves the
+   * counter, so one issued in between makes this attempt retry and look again.
    */
   async issue(invoice: Invoice, codebooks: CodebookSet): Promise<Invoice> {
     if (invoice.number) {
@@ -257,6 +267,22 @@ export class InvoiceService {
 
         const company = { ...companySnap.data(), id: companySnap.id } as Company;
         const assigned = nextInvoiceNumber(company.numbering, invoice.issueDate);
+
+        const taken = await this.inContext(() =>
+          getDocs(
+            query(
+              collection(this.firestore, this.path(invoice.companyId)),
+              where('number', '==', assigned.number),
+              limit(1),
+            ),
+          ),
+        );
+        if (!taken.empty) {
+          throw new Error(
+            `Бројот ${assigned.number} веќе го има друга фактура, па оваа не е издадена. ` +
+              'Проверете го датумот на фактурата и бројачот во Поставки → Нумерација.',
+          );
+        }
 
         const numbered = this.finalize(
           {
@@ -288,6 +314,22 @@ export class InvoiceService {
     );
 
     return finalized;
+  }
+
+  /**
+   * Highest sequence already issued in the period `date` falls in under
+   * `reset`, for the settings screen to keep the counter from going back.
+   */
+  async highestSeqInPeriod(companyId: string, reset: NumberingReset, date: IsoDate): Promise<number> {
+    const invoices = collection(this.firestore, this.path(companyId));
+    const snap = await this.inContext(() =>
+      getDocs(reset === 'never' ? invoices : query(invoices, where('year', '==', yearOf(date)))),
+    );
+    return highestSeqInPeriod(
+      snap.docs.map((d) => d.data() as Pick<Invoice, 'seq' | 'year' | 'month'>),
+      reset,
+      date,
+    );
   }
 
   /**

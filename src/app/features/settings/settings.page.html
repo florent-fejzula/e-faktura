@@ -358,8 +358,17 @@
         празнини, што е прво на што внимава ревизија.
       </p>
 
+      @if (numberingProblem() ?? numberingError(); as message) {
+        <p class="field-error numbering-error" role="alert">{{ message }}</p>
+      }
+
       <div class="actions">
-        <button mat-flat-button type="button" (click)="saveNumbering()" [disabled]="saving()">
+        <button
+          mat-flat-button
+          type="button"
+          (click)="saveNumbering()"
+          [disabled]="saving() || !!numberingProblem()"
+        >
           Зачувај
         </button>
       </div>

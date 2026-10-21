@@ -251,6 +251,16 @@ each change, when the editor is left and when the tab is hidden, so a look at
 another screen and Back returns to it. `/fakturi/nova` and `/fakturi/:id` are
 one route, so that change of address keeps the page instead of rebuilding it.
 
+The counter alone does not make a number unique, so three more rules do:
+issuing looks the number up first and refuses one another invoice already holds
+(an invoice dated into an earlier month, or a counter set back, would otherwise
+repeat it); **Поставки → Нумерација** will not set the counter at or below a
+sequence already used this period — switching to a monthly reset mid-month
+continues the month rather than restarting it at 1; and a format has to print
+whatever its reset restarts (the year for yearly, year and month for monthly),
+or `0001` comes round again every January. Onboarding never asks about
+resetting: a format with the year restarts yearly, a plain running number never.
+
 **Money formatting does not use `Intl`.** `Intl.NumberFormat('mk-MK')` silently
 falls back to `en-US` on browsers built without the `mk` CLDR data — and that
 turns `2.360,00` into `2,360.00`, which a Macedonian reader parses as a

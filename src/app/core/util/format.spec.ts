@@ -1,5 +1,12 @@
 import { defaultNumbering } from '../models/company.model';
-import { nextInvoiceNumber, periodKeyFor, renderInvoiceNumber } from '../data/numbering';
+import {
+  effectiveNextSeq,
+  highestSeqInPeriod,
+  nextInvoiceNumber,
+  numberingPatternProblem,
+  periodKeyFor,
+  renderInvoiceNumber,
+} from '../data/numbering';
 import { amountInWordsMk, numberToWordsMk } from './amount-in-words';
 import { addDays, daysBetween, formatDate, fromIsoDate, skopjeTimestamp, toIsoDate } from './dates';
 import { formatAmount, formatMoney, toNumber } from './money';
@@ -158,5 +165,56 @@ describe('invoice numbering', () => {
     const config = { ...base, reset: 'never' as const, nextSeq: 900, periodKey: 'all' };
     const next = nextInvoiceNumber(config, '2027-05-05');
     expect(next.seq).toBe(900);
+  });
+
+  it('shows a counter left over from last year as the restart it will be', () => {
+    expect(effectiveNextSeq({ ...base, nextSeq: 57, periodKey: '2025' }, '2026-01-05')).toBe(1);
+    expect(effectiveNextSeq({ ...base, nextSeq: 57, periodKey: '2026' }, '2026-01-05')).toBe(57);
+  });
+});
+
+describe('numbering that cannot repeat', () => {
+  it('requires the sequence in the format', () => {
+    expect(numberingPatternProblem('{YYYY}', 'never')).toContain('{SEQ}');
+  });
+
+  it('requires the year when the counter restarts every year', () => {
+    expect(numberingPatternProblem('{SEQ}', 'yearly')).toContain('годината');
+    expect(numberingPatternProblem('{SEQ}/{YYYY}', 'yearly')).toBeNull();
+    expect(numberingPatternProblem('{SEQ}/{YY}', 'yearly')).toBeNull();
+  });
+
+  it('requires the year and month when it restarts every month', () => {
+    expect(numberingPatternProblem('{SEQ}/{YYYY}', 'monthly')).toContain('месецот');
+    expect(numberingPatternProblem('{YYYY}-{MM}-{SEQ}', 'monthly')).toBeNull();
+  });
+
+  it('lets a plain running number go on for ever', () => {
+    expect(numberingPatternProblem('{SEQ}', 'never')).toBeNull();
+  });
+
+  // The case that started this: a yearly counter at 2026-10-004, switched to
+  // monthly in October, must continue October rather than start it again.
+  const issued = [
+    { seq: 1, year: 2026, month: 9 },
+    { seq: 2, year: 2026, month: 9 },
+    { seq: 3, year: 2026, month: 9 },
+    { seq: 4, year: 2026, month: 10 },
+    { seq: null, year: 2026, month: 10 }, // a draft
+    { seq: 9, year: 2025, month: 12 },
+  ];
+
+  it('finds the highest number already used in the current month', () => {
+    expect(highestSeqInPeriod(issued, 'monthly', '2026-10-21')).toBe(4);
+    expect(highestSeqInPeriod(issued, 'monthly', '2026-11-02')).toBe(0);
+  });
+
+  it('in the current year', () => {
+    expect(highestSeqInPeriod(issued, 'yearly', '2026-10-21')).toBe(4);
+    expect(highestSeqInPeriod(issued, 'yearly', '2027-01-04')).toBe(0);
+  });
+
+  it('and ever, for a counter that never resets', () => {
+    expect(highestSeqInPeriod(issued, 'never', '2026-10-21')).toBe(9);
   });
 });

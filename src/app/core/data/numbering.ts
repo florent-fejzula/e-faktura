@@ -1,4 +1,5 @@
 import type { NumberingConfig, NumberingReset } from '../models/company.model';
+import type { Invoice } from '../models/invoice.model';
 import { monthOf, yearOf, type IsoDate } from '../util/dates';
 
 /**
@@ -48,6 +49,68 @@ export function renderInvoiceNumber(config: NumberingConfig, ctx: RenderContext)
 }
 
 /**
+ * Sequence the next invoice dated `issueDate` will take. A counter left over
+ * from an earlier period restarts at 1, so this — not `nextSeq` — is what the
+ * settings screen shows and edits.
+ */
+export function effectiveNextSeq(config: NumberingConfig, issueDate: IsoDate): number {
+  // Crossing into a new year or month restarts the sequence at 1.
+  return config.periodKey === periodKeyFor(config.reset, issueDate)
+    ? Math.max(1, config.nextSeq)
+    : 1;
+}
+
+/**
+ * Why a format would hand out the same number twice under its reset, or null.
+ *
+ * A counter that starts again at 1 every year has to print the year, or each
+ * January's first invoice repeats the last January's number; one that starts
+ * again every month has to print the month as well. The settings screen and
+ * onboarding refuse such a pair before the first invoice ever needs it.
+ */
+export function numberingPatternProblem(pattern: string, reset: NumberingReset): string | null {
+  if (!pattern.includes('{SEQ}')) {
+    return 'Форматот мора да содржи {SEQ} — без реден број сите фактури би го добиле истиот број.';
+  }
+  const hasYear = pattern.includes('{YYYY}') || pattern.includes('{YY}');
+  if (reset === 'yearly' && !hasYear) {
+    return (
+      'Бројачот почнува од 1 секоја година, па форматот мора да ја содржи годината ' +
+      '({YYYY} или {YY}) — инаку бројот се повторува. Или изберете ресетирање „Никогаш“.'
+    );
+  }
+  if (reset === 'monthly' && !(hasYear && pattern.includes('{MM}'))) {
+    return (
+      'Бројачот почнува од 1 секој месец, па форматот мора да ги содржи годината и месецот ' +
+      '({YYYY} и {MM}) — инаку бројот се повторува.'
+    );
+  }
+  return null;
+}
+
+/**
+ * Highest sequence already issued in the period `date` falls in under `reset`
+ * — 0 when there is none. The counter may never be set at or below it: within
+ * a period the sequence only moves forward, or a number comes round twice.
+ *
+ * Counts every numbered invoice dated in that period, whichever scheme it was
+ * numbered under. So switching from a yearly to a monthly counter in October,
+ * with 2026-10-004 already out, continues October at 5 and starts November at 1.
+ */
+export function highestSeqInPeriod(
+  invoices: readonly Pick<Invoice, 'seq' | 'year' | 'month'>[],
+  reset: NumberingReset,
+  date: IsoDate,
+): number {
+  const year = yearOf(date);
+  const month = monthOf(date);
+  return invoices
+    .filter((i) => reset === 'never' || i.year === year)
+    .filter((i) => reset !== 'monthly' || i.month === month)
+    .reduce((highest, i) => Math.max(highest, i.seq ?? 0), 0);
+}
+
+/**
  * Next number for a company, plus the config to write back.
  *
  * Returns the updated config rather than mutating, so the caller can commit it
@@ -58,9 +121,7 @@ export function nextInvoiceNumber(
   issueDate: IsoDate,
 ): { number: string; seq: number; periodKey: string; nextConfig: NumberingConfig } {
   const periodKey = periodKeyFor(config.reset, issueDate);
-
-  // Crossing into a new year or month restarts the sequence at 1.
-  const seq = config.periodKey === periodKey ? Math.max(1, config.nextSeq) : 1;
+  const seq = effectiveNextSeq(config, issueDate);
 
   return {
     number: renderInvoiceNumber(config, { seq, issueDate }),
@@ -72,9 +133,7 @@ export function nextInvoiceNumber(
 
 /** Human-readable preview for the settings screen. */
 export function previewNumbering(config: NumberingConfig, issueDate: IsoDate): string {
-  const periodKey = periodKeyFor(config.reset, issueDate);
-  const seq = config.periodKey === periodKey ? Math.max(1, config.nextSeq) : 1;
-  return renderInvoiceNumber(config, { seq, issueDate });
+  return renderInvoiceNumber(config, { seq: effectiveNextSeq(config, issueDate), issueDate });
 }
 
 export const NUMBERING_TOKENS: readonly { token: string; label: string }[] = [

@@ -26,7 +26,14 @@ import { map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { CodebookService } from '../../core/data/codebook.service';
 import { CompanyService } from '../../core/data/company.service';
-import { NUMBERING_PRESETS, previewNumbering } from '../../core/data/numbering';
+import { InvoiceService } from '../../core/data/invoice.service';
+import {
+  NUMBERING_PRESETS,
+  effectiveNextSeq,
+  numberingPatternProblem,
+  periodKeyFor,
+  previewNumbering,
+} from '../../core/data/numbering';
 import { PrintSettingsService, type LogoChange } from '../../core/data/print-settings.service';
 import {
   PRINT_TITLES,
@@ -46,7 +53,7 @@ import { formatAddress } from '../../core/models/common.model';
 import { LogoError, prepareLogo } from '../../core/util/logo-image';
 import { composePdfFileName } from '../../core/util/share';
 import { UjpSigner, UjpTransport } from '../../core/ujp/ujp-signer';
-import { todayIso } from '../../core/util/dates';
+import { monthOf, todayIso, yearOf, type IsoDate } from '../../core/util/dates';
 import { newId } from '../../core/util/id';
 import { RenewDialog, type RenewDialogData } from '../billing/renew.dialog';
 import { FORMAT_PIPES } from '../../shared/format.pipes';
@@ -81,6 +88,7 @@ export class SettingsPage {
   private readonly transport = inject(UjpTransport);
   protected readonly companies = inject(CompanyService);
   protected readonly codebookService = inject(CodebookService);
+  private readonly invoices = inject(InvoiceService);
 
   protected readonly presets = NUMBERING_PRESETS;
   protected readonly saving = signal(false);
@@ -232,8 +240,23 @@ export class SettingsPage {
 
   private readonly numberingSource = signal(this.numberingForm.getRawValue());
 
+  /** A format that would repeat numbers under the chosen reset, shown as it is typed. */
+  protected readonly numberingProblem = computed(() => {
+    const v = this.numberingSource();
+    return numberingPatternProblem(v.pattern, v.reset);
+  });
+
+  /** Why the last save was refused, until the form changes again. */
+  protected readonly numberingError = signal<string | null>(null);
+
+  /**
+   * What saving the form would produce. The counter shown is the one for the
+   * current period — saving stamps that period on it — so the preview is the
+   * number the next invoice really gets, not one a period rollover would reset.
+   */
   protected readonly numberPreview = computed(() => {
     const v = this.numberingSource();
+    const today = todayIso();
     return previewNumbering(
       {
         pattern: v.pattern,
@@ -241,9 +264,9 @@ export class SettingsPage {
         padding: v.padding,
         nextSeq: v.nextSeq,
         reset: v.reset,
-        periodKey: this.company()?.numbering.periodKey ?? String(new Date().getFullYear()),
+        periodKey: periodKeyFor(v.reset, today),
       },
-      todayIso(),
+      today,
     );
   });
 
@@ -288,7 +311,7 @@ export class SettingsPage {
         pattern: company.numbering.pattern,
         prefix: company.numbering.prefix,
         padding: company.numbering.padding,
-        nextSeq: company.numbering.nextSeq,
+        nextSeq: effectiveNextSeq(company.numbering, todayIso()),
         reset: company.numbering.reset,
       });
 
@@ -321,9 +344,10 @@ export class SettingsPage {
         .then((url) => current && this.savedLogoUrl.set(url));
     });
 
-    this.numberingForm.valueChanges.subscribe(() =>
-      this.numberingSource.set(this.numberingForm.getRawValue()),
-    );
+    this.numberingForm.valueChanges.subscribe(() => {
+      this.numberingSource.set(this.numberingForm.getRawValue());
+      this.numberingError.set(null);
+    });
   }
 
   protected async saveCompany(): Promise<void> {
@@ -374,9 +398,40 @@ export class SettingsPage {
       return;
     }
     const v = this.numberingForm.getRawValue();
+    if (this.numberingProblem()) return;
+
+    // The counter may not go back to a number this period has already used —
+    // the usual way in is switching to a monthly reset mid-month, which would
+    // start again at 1 under numbers that are already out.
+    const today = todayIso();
+    this.saving.set(true);
+    let used: number;
+    try {
+      used = await this.invoices.highestSeqInPeriod(company.id, v.reset, today);
+    } catch (error) {
+      this.saving.set(false);
+      this.snackBar.open(`Грешка: ${(error as Error)?.message ?? error}`, 'Затвори', {
+        duration: 8000,
+      });
+      return;
+    }
+    this.saving.set(false);
+
+    if (v.nextSeq <= used) {
+      this.numberingForm.controls.nextSeq.setValue(used + 1);
+      this.numberingError.set(
+        `${periodPhrase(v.reset, today)} веќе е издадена фактура со реден број ${used}, ` +
+          `па следниот мора да биде најмалку ${used + 1} — инаку некој број би се повторил. ` +
+          'Поправен е; проверете го прегледот и зачувајте повторно.',
+      );
+      return;
+    }
+
+    // Stamped with the current period, so the counter saved is the one used:
+    // a period left over from before would reset it to 1 on the next invoice.
     await this.persist(() =>
       this.companies.update(company.id, {
-        numbering: { ...company.numbering, ...v },
+        numbering: { ...company.numbering, ...v, periodKey: periodKeyFor(v.reset, today) },
       }),
     );
   }
@@ -463,4 +518,16 @@ export class SettingsPage {
       this.saving.set(false);
     }
   }
+}
+
+const MONTHS_IN = [
+  'јануари', 'февруари', 'март', 'април', 'мај', 'јуни',
+  'јули', 'август', 'септември', 'октомври', 'ноември', 'декември',
+];
+
+/** "Во октомври 2026", "Во 2026 година", or "Досега" for a counter that never resets. */
+function periodPhrase(reset: NumberingReset, date: IsoDate): string {
+  if (reset === 'monthly') return `Во ${MONTHS_IN[monthOf(date) - 1]} ${yearOf(date)}`;
+  if (reset === 'yearly') return `Во ${yearOf(date)} година`;
+  return 'Досега';
 }

@@ -11,8 +11,12 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { CompanyService } from '../../core/data/company.service';
-import { NUMBERING_PRESETS, previewNumbering } from '../../core/data/numbering';
-import { defaultCompanyDefaults, defaultNumbering } from '../../core/models/company.model';
+import { NUMBERING_PRESETS, periodKeyFor, previewNumbering } from '../../core/data/numbering';
+import {
+  defaultCompanyDefaults,
+  defaultNumbering,
+  type NumberingReset,
+} from '../../core/models/company.model';
 import { SEED_PAYMENT_TYPES, SEED_UNITS } from '../../core/ujp/codebooks';
 import { todayIso } from '../../core/util/dates';
 import { newId } from '../../core/util/id';
@@ -87,7 +91,7 @@ export class OnboardingPage {
   });
 
   protected readonly preferences = this.fb.nonNullable.group({
-    pattern: ['{SEQ}/{YYYY}', Validators.required],
+    pattern: ['{SEQ}/{YYYY}', [Validators.required, Validators.pattern(/\{SEQ\}/)]],
     prefix: [''],
     padding: [4, [Validators.min(0), Validators.max(10)]],
     nextSeq: [1, [Validators.required, Validators.min(1)]],
@@ -99,19 +103,28 @@ export class OnboardingPage {
   /** Live example of the first number this company will issue. */
   protected readonly numberPreview = computed(() => {
     const v = this.previewSource();
-    return previewNumbering(
-      {
-        ...defaultNumbering(),
-        pattern: v.pattern,
-        prefix: v.prefix,
-        padding: v.padding,
-        nextSeq: v.nextSeq,
-        periodKey: String(new Date().getFullYear()),
-        reset: 'yearly',
-      },
-      todayIso(),
-    );
+    return previewNumbering(this.numberingFrom(v), todayIso());
   });
+
+  /**
+   * The counter for what was chosen here. Onboarding does not ask about
+   * resetting: a format with the year in it starts again each January, and a
+   * plain running number ("0001") never does — restarted yearly, it would hand
+   * out 0001 again every January.
+   */
+  private numberingFrom(v: { pattern: string; prefix: string; padding: number; nextSeq: number }) {
+    const reset: NumberingReset =
+      v.pattern.includes('{YYYY}') || v.pattern.includes('{YY}') ? 'yearly' : 'never';
+    return {
+      ...defaultNumbering(),
+      pattern: v.pattern,
+      prefix: v.prefix,
+      padding: v.padding,
+      nextSeq: v.nextSeq,
+      reset,
+      periodKey: periodKeyFor(reset, todayIso()),
+    };
+  }
 
   /** Mirrors the preferences form into a signal so `computed` can track it. */
   private readonly previewSource = signal(this.preferences.getRawValue());
@@ -195,13 +208,7 @@ export class OnboardingPage {
               },
             ]
           : [],
-        numbering: {
-          ...defaultNumbering(),
-          pattern: p.pattern,
-          prefix: p.prefix,
-          padding: p.padding,
-          nextSeq: p.nextSeq,
-        },
+        numbering: this.numberingFrom(p),
         defaults: {
           ...defaultCompanyDefaults(),
           dueDays: p.dueDays,

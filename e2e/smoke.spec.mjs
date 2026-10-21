@@ -383,6 +383,114 @@ const run = async () => {
       `got "${(await page.locator('.bar__chips app-status-chip').first().textContent())?.trim()}"`,
     );
 
+    // --- 5b. a number already out is never handed out again ----------------
+    step('Duplicate numbers');
+    // The counter set back under 0001/2026 — the way a mid-month switch to a
+    // monthly reset, or a typo in Поставки, used to repeat a number.
+    const numberingCompanyId = await page.evaluate(() =>
+      localStorage.getItem('efaktura.activeCompanyId'),
+    );
+    const setNextSeq = (n) =>
+      fetch(
+        `${FIRESTORE}/companies/${numberingCompanyId}?updateMask.fieldPaths=numbering.nextSeq`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+          body: JSON.stringify({
+            fields: { numbering: { mapValue: { fields: { nextSeq: { integerValue: String(n) } } } } },
+          }),
+        },
+      );
+    await setNextSeq(1);
+    await page.waitForTimeout(800);
+
+    await page.locator('button[aria-label="Повеќе"]').first().click();
+    await page.getByRole('menuitem', { name: 'Зачувај како нова' }).click();
+    // The copy saves itself and trades /nova for its own address at once.
+    await page.locator('.bar__title h1', { hasText: 'Нова фактура' }).waitFor({ timeout: 20000 });
+    await page.locator('.item').first().waitFor({ timeout: 15000 });
+    await page.waitForTimeout(800);
+    await page.getByRole('button', { name: 'Издај' }).click();
+    const repeatConfirm = page.locator('mat-dialog-container');
+    await repeatConfirm.waitFor({ state: 'visible' });
+    await page.waitForTimeout(600);
+    await repeatConfirm.getByRole('button', { name: 'Издај' }).click();
+    await repeatConfirm.waitFor({ state: 'detached', timeout: 20000 });
+    const repeatNotice = page
+      .locator('.mat-mdc-snack-bar-label', { hasText: 'веќе го има друга фактура' })
+      .last();
+    await repeatNotice.waitFor({ timeout: 15000 }).catch(() => {});
+    check('a number another invoice holds is refused at issue', await repeatNotice.isVisible());
+    check(
+      'and the invoice stays a draft',
+      await page.getByRole('button', { name: 'Издај' }).isVisible(),
+    );
+
+    // Put things back: drop the copy, and the counter where it belongs.
+    await page.locator('button[aria-label="Повеќе"]').first().click();
+    await page.getByRole('menuitem', { name: 'Избриши нацрт' }).click();
+    const copyConfirm = page.locator('mat-dialog-container');
+    await copyConfirm.waitFor({ state: 'visible' });
+    await page.waitForTimeout(400);
+    await copyConfirm.getByRole('button', { name: 'Избриши' }).click();
+    await page.waitForURL('**/fakturi', { timeout: 15000 });
+    await setNextSeq(2);
+    await page.waitForTimeout(800);
+
+    // Поставки refuses the settings that would get there in the first place.
+    await open(page, `${BASE}/postavki`);
+    await page.getByRole('button', { name: /Нумерација/ }).first().click();
+    await page.waitForTimeout(800);
+    const numberingPanel = page
+      .locator('mat-expansion-panel')
+      .filter({ hasText: 'Ресетирање на бројачот' });
+    const numberingError = numberingPanel.locator('.numbering-error');
+    const saveNumbering = numberingPanel.getByRole('button', { name: 'Зачувај' });
+
+    await numberingPanel.locator('.presets .chip').filter({ hasText: /^\s*0001\s*$/ }).click();
+    await page.waitForTimeout(300);
+    check(
+      'a plain running number may not restart every year',
+      (await numberingError.count()) === 1 &&
+        (await numberingError.innerText()).includes('годината') &&
+        (await saveNumbering.isDisabled()),
+    );
+    await numberingPanel.locator('.presets .chip').filter({ hasText: /^\s*0001\/2026\s*$/ }).click();
+    await numberingPanel.getByLabel('Ресетирање на бројачот').click();
+    await page.getByRole('option', { name: 'Секој месец' }).click();
+    await page.waitForTimeout(300);
+    check(
+      'nor may a monthly counter leave the month out',
+      (await numberingError.count()) === 1 &&
+        (await numberingError.innerText()).includes('месецот') &&
+        (await saveNumbering.isDisabled()),
+    );
+    await numberingPanel.getByLabel('Ресетирање на бројачот').click();
+    await page.getByRole('option', { name: 'Секоја година' }).click();
+    await page.waitForTimeout(300);
+    check('a valid format clears the warning', (await numberingError.count()) === 0);
+
+    // 0001/2026 is out, so the counter may not go back to 1.
+    const nextSeqField = numberingPanel.getByLabel('Следен реден број');
+    check('the counter shows the next number', (await nextSeqField.inputValue()) === '2');
+    await nextSeqField.fill('1');
+    await saveNumbering.click();
+    await numberingError.waitFor({ timeout: 15000 }).catch(() => {});
+    check(
+      'a counter set back under an issued number is refused',
+      (await numberingError.count()) === 1 &&
+        (await numberingError.innerText()).includes('најмалку 2'),
+    );
+    check('and put right', (await nextSeqField.inputValue()) === '2');
+    const savedNumbering = await fetch(`${FIRESTORE}/companies/${numberingCompanyId}`, {
+      headers: { Authorization: 'Bearer owner' },
+    }).then((res) => res.json());
+    check(
+      'nothing was saved',
+      savedNumbering.fields?.numbering?.mapValue?.fields?.nextSeq?.integerValue === '2',
+      JSON.stringify(savedNumbering.fields?.numbering?.mapValue?.fields?.nextSeq),
+    );
+
     // --- 6. list -----------------------------------------------------------
     step('Invoice list');
     await open(page, `${BASE}/fakturi`);
