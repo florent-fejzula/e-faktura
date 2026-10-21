@@ -30,7 +30,7 @@ export const environment: AppEnvironment = {
     contactPhone: '+389 70 302 376',
     annualPrice: '6.150 ден.',
     monthlyPrice: '600 ден.',
-    priceNote: 'без ДДВ',
+    priceNote: '',
   },
 
   ujp: {

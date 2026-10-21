@@ -586,6 +586,26 @@ const run = async () => {
     const idToken = await idTokenFor(email, 'lozinka123');
     check('company id and user token are available', !!companyId && !!idToken);
 
+    // The admin screen's invoice count, short for a company that issued before
+    // the counter existed, is put right the next time the company is opened.
+    await ownerPatch(`companies/${companyId}`, {
+      stats: {
+        mapValue: {
+          fields: { issuedCount: { integerValue: '99' }, lastIssuedAt: { nullValue: null } },
+        },
+      },
+    });
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(2500);
+    const recounted = await fetch(`${FIRESTORE}/companies/${companyId}`, {
+      headers: { Authorization: 'Bearer owner' },
+    }).then((res) => res.json());
+    check(
+      'a wrong invoice count is recounted from the invoices',
+      recounted.fields?.stats?.mapValue?.fields?.issuedCount?.integerValue === '1',
+      JSON.stringify(recounted.fields?.stats),
+    );
+
     // A new company is inside its trial, so the rules must allow a write.
     const whileActive = await tryCreateInvoice(idToken, companyId, 'probe-active');
     check('rules allow creating while subscribed', whileActive === 200, `HTTP ${whileActive}`);
@@ -729,6 +749,11 @@ const run = async () => {
     await page.waitForTimeout(400);
     const renewText = (await renew.innerText()).replace(/\s+/g, ' ');
     check('the renewal dialog names a price', renewText.includes('6.150 ден.'), renewText.slice(0, 80));
+    check(
+      'it does not suggest VAT on top',
+      !renewText.includes('без ДДВ') && !renewText.includes('()'),
+      renewText.slice(0, 120),
+    );
     check('it gives an account to pay into', renewText.includes('200004007076491'));
     check('it gives a payment reference', renewText.includes(edb));
     check('it offers a way to reach a human', renewText.includes('@'));

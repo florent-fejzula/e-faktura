@@ -7,6 +7,7 @@ import {
   collectionData,
   doc,
   docData,
+  getCountFromServer,
   query,
   serverTimestamp,
   setDoc,
@@ -138,6 +139,35 @@ export class CompanyService {
       // snapshot carries their value.
     });
   });
+  /**
+   * Keeps the admin screen's invoice count true.
+   *
+   * `stats.issuedCount` is moved by the transactions that issue and delete
+   * invoices, but a company that issued invoices before the counter existed
+   * started it at 0 and stayed short by that many. The operator cannot read
+   * invoices to count them, so a member's app does it: one count query when the
+   * company is opened, and a write only when the figure is actually off.
+   */
+  private readonly recounted = new Set<string>();
+  private readonly recountIssued = effect(() => {
+    const company = this.activeCompany();
+    if (!company || this.recounted.has(company.id)) return;
+    this.recounted.add(company.id);
+
+    const invoices = collection(this.firestore, 'companies', company.id, 'invoices');
+    void this.inContext(() => getCountFromServer(query(invoices, where('issuedAt', '!=', null))))
+      .then((snap) => {
+        const issued = snap.data().count;
+        if (issued === company.stats?.issuedCount) return;
+        return this.inContext(() =>
+          updateDoc(doc(this.firestore, 'companies', company.id), { 'stats.issuedCount': issued }),
+        );
+      })
+      .catch(() => {
+        // Informational only; the next time the company is opened tries again.
+      });
+  });
+
   readonly subscriptionState = computed(() => subscriptionState(this.subscription()));
   /**
    * Matches the security rule: a company with no subscription yet is mid

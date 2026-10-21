@@ -18,7 +18,9 @@
     <div class="price__amount">{{ billing.annualPrice }}</div>
     <div class="price__unit">
       годишно
-      <span class="price__note">({{ billing.priceNote }}) · {{ billing.monthlyPrice }} месечно</span>
+      <span class="price__note"
+        >@if (billing.priceNote) {({{ billing.priceNote }}) · }{{ billing.monthlyPrice }} месечно</span
+      >
     </div>
   </div>
 

@@ -49,7 +49,11 @@ export interface BillingConfig {
   /** Headline price, already formatted, e.g. `6.150 ден.` */
   annualPrice: string;
   monthlyPrice: string;
-  /** Shown under the price, e.g. "без ДДВ" or "со вклучен ДДВ". */
+  /**
+   * Shown next to the price, e.g. "без ДДВ" or "со вклучен ДДВ"; empty for
+   * none. An operator not registered for ДДВ charges none, so "без ДДВ" would
+   * read as VAT still to come.
+   */
   priceNote: string;
 }
 
