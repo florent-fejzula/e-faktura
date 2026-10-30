@@ -3,8 +3,8 @@
     <div>
       <h1>Фактури</h1>
       <p class="page__sub">
-        {{ range().from | mkDate }} — {{ range().to | mkDate }} · {{ summary().count }}
-        @if (summary().count === 1) {
+        {{ range().from | mkDate }} — {{ range().to | mkDate }} · {{ rows().length }}
+        @if (rows().length === 1) {
           фактура
         } @else {
           фактури
@@ -40,15 +40,40 @@
       <span class="stat__label">Од тоа ДДВ</span>
       <strong class="stat__value tabular">{{ summary().vat | money: currency() }}</strong>
     </div>
-    <div class="stat">
+    <button
+      type="button"
+      class="stat stat--action"
+      [class.stat--on]="focus() === 'outstanding'"
+      [attr.aria-pressed]="focus() === 'outstanding'"
+      (click)="toggleFocus('outstanding')"
+      [matTooltip]="focus() === 'outstanding' ? 'Прикажи ги сите' : 'Прикажи ги само ненаплатените'"
+    >
       <span class="stat__label">Ненаплатено</span>
       <strong class="stat__value tabular">{{ summary().outstanding | money: currency() }}</strong>
-    </div>
-    <div class="stat" [class.stat--alert]="summary().overdue > 0">
+    </button>
+    <button
+      type="button"
+      class="stat stat--action"
+      [class.stat--alert]="summary().overdue > 0"
+      [class.stat--on]="focus() === 'overdue'"
+      [attr.aria-pressed]="focus() === 'overdue'"
+      (click)="toggleFocus('overdue')"
+      [matTooltip]="focus() === 'overdue' ? 'Прикажи ги сите' : 'Прикажи ги само фактурите во доцнење'"
+    >
       <span class="stat__label">Во доцнење</span>
       <strong class="stat__value tabular">{{ summary().overdue }}</strong>
-    </div>
+    </button>
   </section>
+
+  @if (focus(); as shown) {
+    <p class="focus-note" role="status">
+      <mat-icon>filter_alt</mat-icon>
+      <span>
+        {{ shown === 'overdue' ? 'Прикажани се само фактурите во доцнење.' : 'Прикажани се само ненаплатените фактури.' }}
+      </span>
+      <button mat-button type="button" (click)="focus.set(null)">Прикажи ги сите</button>
+    </p>
+  }
 
   <!-- filters -->
   <section class="filters">
@@ -232,7 +257,26 @@
               <td class="num tabular">{{ invoice.totals.vatAmount | amount }}</td>
               <td class="num tabular strong">{{ invoice.totals.finalAmount | amount }}</td>
               <td><app-status-chip [status]="invoice.status" [issued]="invoice.issuedAt !== null" /></td>
-              <td><app-status-chip [payment]="invoice.paymentStatus" /></td>
+              <td class="pay-cell">
+                @if (invoice.issuedAt !== null) {
+                  <button
+                    type="button"
+                    class="pay-trigger"
+                    [matMenuTriggerFor]="payMenu"
+                    [matMenuTriggerData]="{ invoice: invoice }"
+                    (click)="$event.stopPropagation(); $event.preventDefault()"
+                    matTooltip="Внеси или промени наплата"
+                  >
+                    <app-status-chip [payment]="invoice.paymentStatus" />
+                    <mat-icon class="pay-trigger__icon" aria-hidden="true">expand_more</mat-icon>
+                  </button>
+                  @if (paidOn(invoice); as date) {
+                    <span class="pay-date">{{ date | mkDate }}</span>
+                  }
+                } @else {
+                  <span class="pay-none">—</span>
+                }
+              </td>
               <td class="actions-col">
                 <button
                   mat-icon-button
@@ -266,10 +310,6 @@
               <span class="dot">·</span>
               <span [class.overdue]="isOverdue(invoice)">рок {{ invoice.dueDate | mkDate }}</span>
             </div>
-            <div class="card__chips">
-              <app-status-chip [status]="invoice.status" [issued]="invoice.issuedAt !== null" />
-              <app-status-chip [payment]="invoice.paymentStatus" />
-            </div>
           </a>
           <button
             mat-icon-button
@@ -281,6 +321,24 @@
           >
             <mat-icon>more_vert</mat-icon>
           </button>
+          <div class="card__chips">
+            <app-status-chip [status]="invoice.status" [issued]="invoice.issuedAt !== null" />
+            @if (invoice.issuedAt !== null) {
+              <button
+                type="button"
+                class="pay-trigger"
+                [matMenuTriggerFor]="payMenu"
+                [matMenuTriggerData]="{ invoice: invoice }"
+                aria-label="Наплата"
+              >
+                <app-status-chip [payment]="invoice.paymentStatus" />
+                <mat-icon class="pay-trigger__icon" aria-hidden="true">expand_more</mat-icon>
+              </button>
+              @if (paidOn(invoice); as date) {
+                <span class="pay-date">{{ date | mkDate }}</span>
+              }
+            }
+          </div>
         </li>
       }
     </ul>
@@ -326,10 +384,12 @@
       <mat-icon>content_copy</mat-icon>
       <span>Зачувај како нова</span>
     </button>
-    <button mat-menu-item type="button" (click)="togglePaid(invoice)">
-      <mat-icon>{{ invoice.paymentStatus === 'paid' ? 'money_off' : 'paid' }}</mat-icon>
-      <span>{{ invoice.paymentStatus === 'paid' ? 'Означи неплатена' : 'Означи платена' }}</span>
-    </button>
+    @if (!isDraft(invoice)) {
+      <button mat-menu-item type="button" (click)="togglePaid(invoice)">
+        <mat-icon>{{ invoice.paymentStatus === 'paid' ? 'money_off' : 'paid' }}</mat-icon>
+        <span>{{ invoice.paymentStatus === 'paid' ? 'Означи неплатена' : 'Означи платена' }}</span>
+      </button>
+    }
     @if (canDelete(invoice)) {
       <mat-divider />
       <button mat-menu-item type="button" class="danger" (click)="remove(invoice)">
@@ -337,5 +397,18 @@
         <span>{{ isDraft(invoice) ? 'Избриши нацрт' : 'Избриши фактура' }}</span>
       </button>
     }
+  </ng-template>
+</mat-menu>
+
+<!-- payment popover: opened from the Наплата badge -->
+<mat-menu #payMenu="matMenu" class="pay-menu" xPosition="before">
+  <ng-template matMenuContent let-invoice="invoice">
+    <div class="pay-menu__body" (click)="$event.stopPropagation()" (keydown)="keepKeys($event)">
+      <p class="pay-menu__title">
+        <strong>{{ invoice.number }}</strong>
+        <span>{{ invoice.totals.finalAmount | money: invoice.currency }}</span>
+      </p>
+      <app-payment-form [invoice]="invoice" (done)="payMenu.closed.emit('click')" />
+    </div>
   </ng-template>
 </mat-menu>

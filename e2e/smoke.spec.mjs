@@ -530,12 +530,167 @@ const run = async () => {
       (await page.locator('.table tbody tr').count()) === 1,
     );
 
+    // --- 6b. payments ------------------------------------------------------
+    step('Payments');
+    await page.locator('.filters__search input').fill('');
+    await page.waitForTimeout(300);
+
+    const invoiceDocs = await fetch(`${FIRESTORE}/companies/${numberingCompanyId}:runQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'invoices' }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'number' },
+              op: 'EQUAL',
+              value: { stringValue: '0001/2026' },
+            },
+          },
+        },
+      }),
+    }).then((res) => res.json());
+    const issuedDoc = invoiceDocs.find((row) => row.document)?.document;
+    const issuedPath = issuedDoc.name.split('/documents/')[1];
+    const readIssued = () =>
+      fetch(`${FIRESTORE}/${issuedPath}`, { headers: { Authorization: 'Bearer owner' } })
+        .then((res) => res.json())
+        .then((d) => d.fields);
+    const dmy = (date) =>
+      `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
+    const iso = (date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+    // Overdue: the tile counted the invoice, but the row never showed it while
+    // УЈП had no copy — which, with sending not wired up, was every invoice.
+    const originalDue = issuedDoc.fields.dueDate.stringValue;
+    await ownerPatch(issuedPath, { dueDate: { stringValue: `${new Date().getFullYear()}-01-02` } });
+    await page.waitForTimeout(1200);
+    const listRow = page.locator('.table tbody tr').first();
+    check('an overdue issued invoice is marked in its row', (await listRow.locator('.overdue-icon').count()) === 1);
+
+    // The tiles narrow the list to what is still owed.
+    const overdueTile = page.locator('button.stat', { hasText: 'Во доцнење' });
+    const owedTile = page.locator('button.stat', { hasText: 'Ненаплатено' });
+    await overdueTile.click();
+    await page.waitForTimeout(300);
+    check(
+      'the overdue tile shows only overdue invoices',
+      (await overdueTile.getAttribute('aria-pressed')) === 'true' &&
+        (await page.locator('.table tbody tr').count()) === 1 &&
+        (await page.locator('.focus-note').innerText()).includes('во доцнење'),
+    );
+    await page.getByRole('button', { name: 'Прикажи ги сите' }).click();
+    await page.waitForTimeout(300);
+    check('and "Прикажи ги сите" shows everything again', (await page.locator('.focus-note').count()) === 0);
+    await owedTile.click();
+    await page.waitForTimeout(300);
+    check(
+      'the outstanding tile shows only unpaid invoices',
+      (await owedTile.getAttribute('aria-pressed')) === 'true' &&
+        (await page.locator('.table tbody tr').count()) === 1,
+    );
+    await owedTile.click();
+    await page.waitForTimeout(300);
+    check('pressing it again turns it off', (await owedTile.getAttribute('aria-pressed')) === 'false');
+    await ownerPatch(issuedPath, { dueDate: { stringValue: originalDue } });
+    await page.waitForTimeout(800);
+
+    // Marking paid from the badge, on the day the money actually arrived.
+    const yesterday = new Date(Date.now() - 86_400_000);
+    const payMenu = page.locator('.pay-menu');
+    await listRow.locator('.pay-trigger').click();
+    await payMenu.waitFor({ state: 'visible' });
+    await page.waitForTimeout(300);
+    check(
+      'the badge opens a payment form for the full amount',
+      (await payMenu.getByLabel('Вкупно платено').inputValue()) === '2360',
+      await payMenu.getByLabel('Вкупно платено').inputValue(),
+    );
+    await payMenu.getByLabel('Платено на').fill(dmy(yesterday));
+    await payMenu.getByLabel('Платено на').press('Tab');
+    check('Tab moves within the form instead of closing it', await payMenu.isVisible());
+    await payMenu.getByRole('button', { name: 'Означи платена' }).click();
+    await payMenu.waitFor({ state: 'detached', timeout: 15000 });
+    await page.waitForTimeout(800);
+    check(
+      'the row shows it paid, and when',
+      (await listRow.locator('.pay-trigger').innerText()).includes('Платена') &&
+        (await listRow.locator('.pay-date').innerText()).includes(dmy(yesterday)),
+    );
+    const paidFields = await readIssued();
+    check(
+      'it is stored as paid on that day',
+      paidFields.paymentStatus?.stringValue === 'paid' &&
+        iso(new Date(Number(paidFields.paidAt?.integerValue))) === iso(yesterday),
+    );
+
+    // A wrong click costs nothing.
+    const undo = page.locator('.mat-mdc-snack-bar-container').getByRole('button', { name: 'Врати' });
+    await undo.click();
+    await page.waitForTimeout(1200);
+    check(
+      '"Врати" puts it back',
+      (await listRow.locator('.pay-trigger').innerText()).includes('Неплатена') &&
+        (await readIssued()).paymentStatus?.stringValue === 'unpaid',
+    );
+
+    // Part of it.
+    await listRow.locator('.pay-trigger').click();
+    await payMenu.waitFor({ state: 'visible' });
+    await page.waitForTimeout(300);
+    await payMenu.getByLabel('Вкупно платено').fill('1000');
+    await payMenu.getByRole('button', { name: 'Означи делумно платена' }).click();
+    await payMenu.waitFor({ state: 'detached', timeout: 15000 });
+    await page.waitForTimeout(800);
+    check(
+      'a smaller amount marks it partly paid',
+      (await listRow.locator('.pay-trigger').innerText()).includes('Делумно'),
+    );
+    check(
+      'and only the rest counts as outstanding',
+      (await owedTile.locator('.stat__value').innerText()).includes('1.360,00'),
+      await owedTile.locator('.stat__value').innerText(),
+    );
+
+    // On the invoice itself.
+    await listRow.click();
+    await page.waitForURL(/\/fakturi\/[^/]+$/, { timeout: 15000 });
+    const paymentCard = page.locator('.card--payment');
+    await paymentCard.waitFor({ timeout: 15000 });
+    check(
+      'an issued invoice has a Наплата panel that knows what is paid',
+      (await paymentCard.innerText()).includes('Досега платено'),
+    );
+    await paymentCard.getByRole('button', { name: 'Означи платена' }).click();
+    await page.waitForTimeout(1200);
+    check(
+      'it can be marked paid there',
+      (await paymentCard.innerText()).includes('Платено 2.360,00') &&
+        (await paymentCard.getByRole('button', { name: 'Измени' }).isVisible()),
+    );
+    await paymentCard.getByRole('button', { name: 'Измени' }).click();
+    await paymentCard.getByRole('button', { name: 'Означи неплатена' }).click();
+    await page.waitForTimeout(1200);
+    check(
+      'and back to unpaid',
+      (await readIssued()).paymentStatus?.stringValue === 'unpaid' &&
+        (await paymentCard.getByRole('button', { name: 'Означи платена' }).isVisible()),
+    );
+    await open(page, `${BASE}/fakturi`);
+    await page.waitForTimeout(1000);
+
     // --- 7. mobile ---------------------------------------------------------
     step('Mobile layout');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(600);
     check('bottom tab bar appears on a phone', await page.locator('.tabbar').isVisible());
     check('card list replaces the table', await page.locator('.cards .card').first().isVisible());
+    check(
+      'the payment badge can be pressed on a phone too',
+      await page.locator('.cards .card .pay-trigger').first().isVisible(),
+    );
     check('desktop rail is hidden', !(await page.locator('.rail').isVisible().catch(() => false)));
 
     // Narrowest common Android width. Anything past the viewport here is what

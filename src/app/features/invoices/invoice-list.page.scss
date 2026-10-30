@@ -68,6 +68,114 @@
   font: var(--mat-sys-title-medium);
 }
 
+/* The two tiles that narrow the list to what is still owed. */
+.stat--action {
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+
+  &:hover {
+    border-color: var(--mat-sys-outline);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+.stat--action:not(.stat--alert) {
+  color: inherit;
+}
+
+.stat--on {
+  border-color: var(--mat-sys-primary);
+  box-shadow: inset 0 0 0 1px var(--mat-sys-primary);
+}
+
+.focus-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--mat-sys-primary);
+  }
+}
+
+/* --- payment badge and popover ---------------------------------------------- */
+
+.pay-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  margin: -2px 0 -2px -2px;
+  padding: 2px 2px 2px 2px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--mat-sys-on-surface-variant);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--mat-sys-outline-variant);
+    background: var(--mat-sys-surface-container);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
+  }
+}
+
+.pay-trigger__icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+
+.pay-date {
+  display: block;
+  margin-top: 2px;
+  padding-inline-start: 4px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.pay-none {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.pay-menu__body {
+  box-sizing: border-box;
+  width: 300px;
+  max-width: 100%;
+  padding: 8px 16px 6px;
+}
+
+.pay-menu__title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  font: var(--mat-sys-body-medium);
+
+  span {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
 /* --- filters -------------------------------------------------------------- */
 
 .filters {
@@ -267,9 +375,10 @@
 }
 
 .card {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 4px;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 14px;
   background: var(--mat-sys-surface);
@@ -277,11 +386,10 @@
 
 .card__main {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 4px 12px 14px;
+  padding: 12px 4px 6px 14px;
   color: inherit;
   text-decoration: none;
 }
@@ -309,11 +417,21 @@
 
 .card__chips {
   display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
   gap: 6px;
-  margin-top: 2px;
+  padding: 0 14px 12px;
+
+  .pay-date {
+    display: inline;
+    margin: 0;
+  }
 }
 
 .card__menu {
+  grid-column: 2;
+  grid-row: 1;
   margin: 6px 2px 0 0;
 }
 

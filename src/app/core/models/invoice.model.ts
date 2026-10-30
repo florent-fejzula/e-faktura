@@ -24,6 +24,16 @@ export const UJP_STATUS_LABELS: Record<UjpStatusCode, string> = {
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
 
 /**
+ * What a paid amount makes of an invoice: nothing paid, some of it, or all of
+ * it. Half a денар short still counts as paid, so a rounding difference between
+ * the bank and the invoice never leaves one stuck as "partial".
+ */
+export function paymentStatusFor(paidAmount: number, finalAmount: number): PaymentStatus {
+  if (paidAmount <= 0) return 'unpaid';
+  return paidAmount + 0.005 >= finalAmount ? 'paid' : 'partial';
+}
+
+/**
  * How the user typed the unit price on a line. UJP only ever receives a net
  * (VAT-exclusive) price, so `gross` lines are converted on the way out — but we
  * keep the entry mode so reopening an invoice shows what the user actually

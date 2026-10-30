@@ -57,6 +57,8 @@ import { ShareDialog, type ShareDialogData } from './share.dialog';
 import { FORMAT_PIPES } from '../../shared/format.pipes';
 import { StatusChipComponent } from '../../shared/status-chip.component';
 import { InvoicePrintComponent } from './invoice-print.component';
+import { paidOn } from './payment-actions';
+import { PaymentFormComponent } from './payment-form.component';
 import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
 
 /**
@@ -89,6 +91,7 @@ import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
     MatProgressBarModule,
     StatusChipComponent,
     InvoicePrintComponent,
+    PaymentFormComponent,
     ...FORMAT_PIPES,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -239,6 +242,10 @@ export class InvoiceEditorPage {
     if (!invoice || !totals) return null;
     return validateInvoice({ ...invoice, totals, vatTotals }, this.codebooks());
   });
+
+  /** A paid invoice shows when it was paid; "Измени" opens the form. */
+  protected readonly editingPayment = signal(false);
+  protected readonly paidOn = paidOn;
 
   protected readonly editable = computed(() => {
     const invoice = this.invoice();

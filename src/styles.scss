@@ -87,6 +87,12 @@ input[type='number']::-webkit-inner-spin-button {
   color: var(--mat-sys-error);
 }
 
+// The payment popover is a small form, wider than Material's 280px for a list
+// of menu items. Global for the same reason as above.
+.mat-mdc-menu-panel.pay-menu {
+  max-width: min(340px, calc(100vw - 32px));
+}
+
 // Scrollbars: thin and unobtrusive, matching the surface palette.
 * {
   scrollbar-width: thin;

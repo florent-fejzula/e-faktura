@@ -427,6 +427,29 @@
 
       <!-- ============================ SIDE ============================ -->
       <aside class="col-side">
+        @if (!editable()) {
+          <section class="card card--payment">
+            <div class="card__head">
+              <h2>Наплата</h2>
+              <app-status-chip [payment]="inv.paymentStatus" />
+            </div>
+            @if (inv.paymentStatus === 'paid' && !editingPayment()) {
+              <p class="paid-note">
+                Платено {{ inv.paidAmount | money: inv.currency }}
+                @if (paidOn(inv); as date) {
+                  на {{ date | mkDate }}
+                }
+              </p>
+              <button mat-stroked-button type="button" (click)="editingPayment.set(true)">
+                <mat-icon>edit</mat-icon>
+                Измени
+              </button>
+            } @else {
+              <app-payment-form [invoice]="inv" (done)="editingPayment.set(false)" />
+            }
+          </section>
+        }
+
         <section class="card">
           <div class="card__head"><h2>Детали</h2></div>
 

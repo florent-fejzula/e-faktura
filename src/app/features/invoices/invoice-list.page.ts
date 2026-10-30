@@ -40,6 +40,8 @@ import {
 import { matchesSearch } from '../../core/util/id';
 import { round2 } from '../../core/util/money';
 import { ConfirmDialog, type ConfirmData } from '../../shared/confirm.dialog';
+import { PaymentActions, paidOn } from './payment-actions';
+import { PaymentFormComponent } from './payment-form.component';
 import { ShareDialog, type ShareDialogData } from './share.dialog';
 import { FORMAT_PIPES } from '../../shared/format.pipes';
 import { StatusChipComponent } from '../../shared/status-chip.component';
@@ -89,6 +91,7 @@ interface QuickRange {
     MatDividerModule,
     MatProgressBarModule,
     StatusChipComponent,
+    PaymentFormComponent,
     ...FORMAT_PIPES,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -101,6 +104,7 @@ export class InvoiceListPage {
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly router = inject(Router);
+  private readonly payments = inject(PaymentActions);
   protected readonly companies = inject(CompanyService);
 
   protected readonly statusLabels = UJP_STATUS_LABELS;
@@ -167,7 +171,19 @@ export class InvoiceListPage {
       (this.maxAmount() !== null ? 1 : 0),
   );
 
-  protected readonly filtered = computed<Invoice[]>(() => {
+  /**
+   * What the Ненаплатено and Во доцнење tiles narrow the list to. Kept apart
+   * from the filters so the tiles' own figures stay put while one is on — a
+   * tile that changed its number when pressed could not be pressed again.
+   */
+  protected readonly focus = signal<'outstanding' | 'overdue' | null>(null);
+
+  protected toggleFocus(focus: 'outstanding' | 'overdue'): void {
+    this.focus.update((current) => (current === focus ? null : focus));
+  }
+
+  /** Everything the filters let through, before a tile narrows it. */
+  private readonly matching = computed<Invoice[]>(() => {
     const query = this.search().trim();
     const statuses = this.statusFilter();
     const payments = this.paymentFilter();
@@ -195,6 +211,14 @@ export class InvoiceListPage {
     });
   });
 
+  protected readonly filtered = computed<Invoice[]>(() => {
+    const focus = this.focus();
+    if (!focus) return this.matching();
+    return this.matching().filter((invoice) =>
+      focus === 'overdue' ? this.isOverdue(invoice) : isReceivable(invoice),
+    );
+  });
+
   // --- sorting -------------------------------------------------------------
 
   protected readonly sortKey = signal<SortKey>('issueDate');
@@ -220,14 +244,14 @@ export class InvoiceListPage {
   // --- summary -------------------------------------------------------------
 
   protected readonly summary = computed(() => {
-    const rows = this.filtered();
+    const rows = this.matching();
     const total = round2(rows.reduce((s, i) => s + i.totals.finalAmount, 0));
     const vat = round2(rows.reduce((s, i) => s + i.totals.vatAmount, 0));
     // Receivables are owed the moment an invoice is *issued*, which is not the
     // same as `status !== '00'`: УЈП's status stays "00" until they actually
     // have a copy, so testing it hid every issued-but-unsubmitted invoice from
     // the outstanding figure. `isEditable` is the real draft test.
-    const receivable = rows.filter((i) => !isEditable(i) && i.paymentStatus !== 'paid');
+    const receivable = rows.filter(isReceivable);
     const outstanding = round2(
       receivable.reduce((s, i) => s + (i.totals.finalAmount - i.paidAmount), 0),
     );
@@ -264,14 +288,13 @@ export class InvoiceListPage {
     this.clientFilter.set([]);
     this.minAmount.set(null);
     this.maxAmount.set(null);
+    this.focus.set(null);
   }
 
   protected isOverdue(invoice: Invoice): boolean {
-    return (
-      invoice.status !== '00' &&
-      invoice.paymentStatus !== 'paid' &&
-      invoice.dueDate < todayIso()
-    );
+    // Issued, not "known to УЈП": status stays "00" until an invoice is
+    // submitted, and testing it hid the overdue mark from every one that was not.
+    return isReceivable(invoice) && invoice.dueDate < todayIso();
   }
 
   protected async duplicate(invoice: Invoice): Promise<void> {
@@ -283,14 +306,30 @@ export class InvoiceListPage {
     await this.router.navigate(['/fakturi/nova'], { state: { draft } });
   }
 
+  /** The menu's one-click version: paid in full today, or back to unpaid. */
   protected async togglePaid(invoice: Invoice): Promise<void> {
     const paid = invoice.paymentStatus === 'paid';
-    await this.invoiceService.setPayment(
-      invoice,
-      paid ? 0 : invoice.totals.finalAmount,
-      paid ? null : Date.now(),
-    );
-    this.snackBar.open(paid ? 'Означена како неплатена.' : 'Означена како платена.', 'Во ред');
+    try {
+      await this.payments.record(
+        invoice,
+        paid ? 0 : invoice.totals.finalAmount,
+        paid ? null : Date.now(),
+      );
+    } catch (error) {
+      this.snackBar.open(`Не успеа: ${(error as Error)?.message ?? error}`, 'Затвори', {
+        duration: 8000,
+      });
+    }
+  }
+
+  protected readonly paidOn = paidOn;
+
+  /**
+   * Keys typed in the payment popover stay in it. The menu around it would
+   * otherwise take Tab to mean "close" and Home/End to mean "first item".
+   */
+  protected keepKeys(event: KeyboardEvent): void {
+    if (event.key !== 'Escape') event.stopPropagation();
   }
 
   protected share(invoice: Invoice): void {
@@ -427,4 +466,9 @@ function compareBy(key: SortKey, a: Invoice, b: Invoice): number {
     case 'payment':
       return a.paymentStatus.localeCompare(b.paymentStatus);
   }
+}
+
+/** Issued and not yet paid in full: money the company is owed. */
+function isReceivable(invoice: Invoice): boolean {
+  return !isEditable(invoice) && invoice.paymentStatus !== 'paid';
 }

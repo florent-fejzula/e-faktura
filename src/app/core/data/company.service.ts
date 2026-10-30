@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  waitForPendingWrites,
   where,
   writeBatch,
 } from '@angular/fire/firestore';
@@ -154,9 +155,22 @@ export class CompanyService {
     if (!company || this.recounted.has(company.id)) return;
     this.recounted.add(company.id);
 
+    // A company just created shows up here before the server has it, and a
+    // count sent then is refused — so wait for the write, and skip a company
+    // the server turned down (an ЕДБ already taken).
     const invoices = collection(this.firestore, 'companies', company.id, 'invoices');
-    void this.inContext(() => getCountFromServer(query(invoices, where('issuedAt', '!=', null))))
+    void this.inContext(() => waitForPendingWrites(this.firestore))
+      .then(() => {
+        if (!this.companies().some((c) => c.id === company.id)) {
+          this.recounted.delete(company.id);
+          return null;
+        }
+        return this.inContext(() =>
+          getCountFromServer(query(invoices, where('issuedAt', '!=', null))),
+        );
+      })
       .then((snap) => {
+        if (!snap) return;
         const issued = snap.data().count;
         if (issued === company.stats?.issuedCount) return;
         return this.inContext(() =>

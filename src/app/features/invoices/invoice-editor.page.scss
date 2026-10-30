@@ -391,6 +391,12 @@
   font: var(--mat-sys-body-small);
 }
 
+/* Payment of an issued invoice: when, and how much. */
+.paid-note {
+  margin: 0 0 12px;
+  font: var(--mat-sys-body-medium);
+}
+
 .card--totals {
   background: var(--mat-sys-surface);
 }

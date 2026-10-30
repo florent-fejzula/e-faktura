@@ -21,7 +21,7 @@ import type { Company, NumberingReset } from '../models/company.model';
 import { snapshotClient } from '../models/client.model';
 import { snapshotCompany } from '../models/company.model';
 import { emptyAddress } from '../models/common.model';
-import type { Invoice, InvoiceItem, PaymentStatus } from '../models/invoice.model';
+import { paymentStatusFor, type Invoice, type InvoiceItem } from '../models/invoice.model';
 import type { CodebookSet } from '../ujp/codebooks';
 import { computeInvoice } from '../ujp/totals';
 import { amountInWordsMk } from '../util/amount-in-words';
@@ -386,8 +386,7 @@ export class InvoiceService {
     paidAt: number | null,
   ): Promise<void> {
     const amount = round2(paidAmount);
-    const status: PaymentStatus =
-      amount <= 0 ? 'unpaid' : amount + 0.005 >= invoice.totals.finalAmount ? 'paid' : 'partial';
+    const status = paymentStatusFor(amount, invoice.totals.finalAmount);
 
     await this.inContext(() =>
       updateDoc(doc(this.firestore, this.path(invoice.companyId), invoice.id), {
