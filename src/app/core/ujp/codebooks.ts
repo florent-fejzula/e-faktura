@@ -117,6 +117,14 @@ export const SEED_DOCUMENT_TYPES: readonly DocumentType[] = [
     hasReference: false,
     isReferenceMandatory: false,
   },
+  {
+    code: '130',
+    name: 'Авансна фактура',
+    needSignature: true,
+    hasItems: true,
+    hasReference: true,
+    isReferenceMandatory: false,
+  },
 ];
 
 export const SEED_REF_DOCUMENT_TYPES: readonly RefDocumentType[] = [

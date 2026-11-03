@@ -12,6 +12,7 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
@@ -31,7 +32,7 @@ import { CatalogService } from '../../core/data/catalog.service';
 import { ClientService } from '../../core/data/client.service';
 import { CodebookService } from '../../core/data/codebook.service';
 import { CompanyService } from '../../core/data/company.service';
-import { InvoiceService, createItem } from '../../core/data/invoice.service';
+import { InvoiceService, createItem, type AdvanceInvoice } from '../../core/data/invoice.service';
 import {
   applyCatalogItem,
   catalogFieldsFromLine,
@@ -42,7 +43,14 @@ import type { Client } from '../../core/models/client.model';
 import { snapshotClient } from '../../core/models/client.model';
 import { printSettings, snapshotCompany } from '../../core/models/company.model';
 import type { Invoice, InvoiceItem, PriceMode } from '../../core/models/invoice.model';
-import { NEW_INVOICE_SEGMENT, isDeletable, isEditable } from '../../core/models/invoice.model';
+import {
+  DOC_TYPES,
+  NEW_INVOICE_SEGMENT,
+  docLabel,
+  isAdvanceInvoice,
+  isDeletable,
+  isEditable,
+} from '../../core/models/invoice.model';
 import { indicatorShortLabel, resolveIndicator } from '../../core/ujp/codebooks';
 import { computeInvoice } from '../../core/ujp/totals';
 import { validateInvoice } from '../../core/ujp/ujp-validator';
@@ -78,6 +86,7 @@ import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
     FormsModule,
     RouterLink,
     MatButtonModule,
+    MatButtonToggleModule,
     MatIconModule,
     MatFormFieldModule,
     MatInputModule,
@@ -150,6 +159,83 @@ export class InvoiceEditorPage {
       .slice(0, 8);
   });
 
+  // --- advance invoices ----------------------------------------------------
+
+  protected readonly docLabel = docLabel;
+  protected readonly isAdvance = computed(() => {
+    const invoice = this.invoice();
+    return !!invoice && isAdvanceInvoice(invoice);
+  });
+
+  private readonly advances = toSignal(
+    toObservable(this.companies.activeCompanyId).pipe(
+      switchMap((id) => this.invoiceService.watchAdvances(id)),
+    ),
+    { initialValue: [] as AdvanceInvoice[] },
+  );
+
+  /**
+   * Advance invoices this invoice could deduct: the same client's, in the same
+   * currency, not yet deducted anywhere else. Offered in a banner as soon as
+   * the client is chosen, so the advance is not forgotten.
+   */
+  protected readonly advanceOffers = computed<AdvanceInvoice[]>(() => {
+    const invoice = this.invoice();
+    if (!invoice || isAdvanceInvoice(invoice) || invoice.advanceInvoiceId) return [];
+    const { id: clientId, taxNumber } = invoice.client;
+    if (!clientId && !taxNumber) return [];
+    return this.advances().filter(
+      (a) =>
+        a.id !== invoice.id &&
+        !a.usedBy &&
+        a.currency === invoice.currency &&
+        (clientId ? a.clientId === clientId : a.clientTaxNumber === taxNumber),
+    );
+  });
+
+  /** Фактура or Авансна фактура — chosen at the top of a draft. */
+  protected setAdvance(advance: boolean): void {
+    const current = this.invoice();
+    if (!current || advance === isAdvanceInvoice(current)) return;
+    const type = advance ? DOC_TYPES.advance : DOC_TYPES.invoice;
+    const dueDays = this.companies.activeCompany()?.defaults.dueDays ?? 15;
+    this.patch({
+      docType: type.code,
+      docTypeName: type.name,
+      // Already paid, so it is due the day it is issued.
+      dueDate: advance ? current.issueDate : addDays(current.issueDate, dueDays),
+      advanceAmount: 0,
+      advanceDate: null,
+      advanceDescription: '',
+      advanceInvoiceId: null,
+      advanceInvoiceNumber: null,
+      advanceVatAmount: 0,
+    });
+  }
+
+  /** Deducts an advance invoice: its amount, date and number, in one go. */
+  protected deductAdvance(advance: AdvanceInvoice): void {
+    this.patch({
+      advanceAmount: advance.amount,
+      advanceDate: advance.issueDate,
+      advanceDescription: `Авансна фактура бр. ${advance.number}`,
+      advanceInvoiceId: advance.id,
+      advanceInvoiceNumber: advance.number,
+      advanceVatAmount: advance.vatAmount,
+    });
+  }
+
+  protected removeAdvance(): void {
+    this.patch({
+      advanceAmount: 0,
+      advanceDate: null,
+      advanceDescription: '',
+      advanceInvoiceId: null,
+      advanceInvoiceNumber: null,
+      advanceVatAmount: 0,
+    });
+  }
+
   // --- Ценовник module ------------------------------------------------------
 
   protected readonly catalogEnabled = computed(() => this.companies.hasModule('catalog'));
@@ -219,7 +305,7 @@ export class InvoiceEditorPage {
     const invoice = this.invoice();
     if (!invoice) return null;
     return computeInvoice(invoice.items, this.codebooks(), {
-      advanceAmount: invoice.advanceAmount,
+      advanceAmount: isAdvanceInvoice(invoice) ? 0 : invoice.advanceAmount,
     });
   });
 
@@ -755,7 +841,12 @@ export class InvoiceEditorPage {
         );
       }
 
-      this.snackBar.open(`Фактура ${issued.number} е издадена.`, 'Во ред');
+      this.snackBar.open(
+        isAdvanceInvoice(issued)
+          ? `Авансна фактура ${issued.number} е издадена и означена платена.`
+          : `Фактура ${issued.number} е издадена.`,
+        'Во ред',
+      );
       this.adoptAddress();
     } catch (error) {
       this.reportError(error);

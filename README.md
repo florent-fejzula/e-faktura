@@ -290,6 +290,15 @@ JSON examples as PDFs.
   Сторнирана, `09`, `10`) plus `EUID` / QR fields on the invoice.
 - A **Провери УЈП документ** dialog showing the exact JSON that would be signed,
   next to the validation result, with copy and download.
+- Two document types: **100 Фактура** and **130 Авансна фактура** (added by УЈП on
+  28.07.2026). The law (ЗДДВ чл. 53) wants an invoice for every advance received,
+  within 5 working days. A draft is switched between the two at the top of the
+  editor. An advance invoice prints as such, goes out marked paid (it is issued
+  for money already in), asks for no payment, and is sent without the
+  `docAvans*` / `docFinalAmount` fields, which only a 100 has. The next invoice
+  for the same client offers to deduct it in one click; the deduction carries
+  the advance's number, date and the ДДВ it contained, it is offered to no other
+  invoice afterwards, and the list's ДДВ total counts that ДДВ once.
 
 ### What is not wired up, and why
 

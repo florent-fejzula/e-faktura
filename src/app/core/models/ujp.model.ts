@@ -137,10 +137,11 @@ export interface UjpTotals {
   docGrossAmount: number;
   /** Gross rounded to whole currency units — what the buyer actually pays. */
   docGrossAmountR: number;
-  docAvansDate: string | null;
-  docAvansDesc: string | null;
-  docAvansAmount: number;
-  docFinalAmount: number;
+  /** Deduction of an advance — on a Фактура (100) only; an advance invoice has none. */
+  docAvansDate?: string | null;
+  docAvansDesc?: string | null;
+  docAvansAmount?: number;
+  docFinalAmount?: number;
 }
 
 export interface UjpVatTotal {

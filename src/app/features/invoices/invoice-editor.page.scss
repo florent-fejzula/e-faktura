@@ -89,6 +89,93 @@
   }
 }
 
+/* --- Фактура or Авансна фактура ------------------------------------------- */
+
+.kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+}
+
+.kind__hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 62ch;
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--mat-sys-primary);
+  }
+}
+
+/* An advance the client paid that this invoice has not deducted yet. */
+.advance-offer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 30%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent);
+
+  > mat-icon {
+    flex: none;
+    color: var(--mat-sys-primary);
+  }
+}
+
+.advance-offer__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.advance-offer__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.advance-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px 8px 12px;
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container-high);
+
+  > mat-icon {
+    flex: none;
+    color: var(--mat-sys-primary);
+  }
+}
+
+.advance-link__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+.advance-link__sub {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
 /* --- banners -------------------------------------------------------------- */
 
 .issues,
@@ -427,6 +514,10 @@
 .totals--muted dd {
   color: var(--mat-sys-on-surface-variant);
   font: var(--mat-sys-body-small);
+}
+
+.totals--sub dt {
+  padding-inline-start: 12px;
 }
 
 .totals__sep {

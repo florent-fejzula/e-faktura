@@ -17,7 +17,9 @@
       <div class="bar__title">
         <h1>
           @if (inv.number) {
-            Фактура {{ inv.number }}
+            {{ docLabel(inv) }} {{ inv.number }}
+          } @else if (isAdvance()) {
+            Нова авансна фактура
           } @else {
             Нова фактура
           }
@@ -80,6 +82,28 @@
 
     @if (saving()) {
       <mat-progress-bar mode="indeterminate" class="no-print" />
+    }
+
+    <!-- what is being issued ------------------------------------------- -->
+    @if (editable()) {
+      <div class="kind no-print">
+        <mat-button-toggle-group
+          [value]="isAdvance()"
+          (change)="setAdvance($event.value)"
+          aria-label="Вид на документ"
+          hideSingleSelectionIndicator
+        >
+          <mat-button-toggle [value]="false">Фактура</mat-button-toggle>
+          <mat-button-toggle [value]="true">Авансна фактура</mat-button-toggle>
+        </mat-button-toggle-group>
+        @if (isAdvance()) {
+          <p class="kind__hint">
+            <mat-icon>info</mat-icon>
+            За уплата примена однапред. При издавање се означува платена, а подоцна се одбива
+            од конечната фактура.
+          </p>
+        }
+      </div>
     }
 
     <!-- validation summary ---------------------------------------------- -->
@@ -206,6 +230,29 @@
             </div>
           }
         </section>
+
+        <!-- an advance this client already paid, not yet deducted -->
+        @if (editable() && advanceOffers().length) {
+          <section class="advance-offer no-print">
+            <mat-icon>savings</mat-icon>
+            <div class="advance-offer__body">
+              <strong>
+                {{ advanceOffers().length === 1 ? 'Купувачот има авансна фактура што не е одбиена.' : 'Купувачот има авансни фактури што не се одбиени.' }}
+              </strong>
+              @for (offer of advanceOffers(); track offer.id) {
+                <div class="advance-offer__row">
+                  <span>
+                    {{ offer.number }} од {{ offer.issueDate | mkDate }} ·
+                    <strong>{{ offer.amount | money: offer.currency }}</strong>
+                  </span>
+                  <button mat-flat-button type="button" (click)="deductAdvance(offer)">
+                    Одбиј ја од оваа фактура
+                  </button>
+                </div>
+              }
+            </div>
+          </section>
+        }
 
         <!-- items -->
         <section class="card">
@@ -548,19 +595,47 @@
               </mat-form-field>
             }
 
-            <mat-form-field>
-              <mat-label>Аванс</mat-label>
-              <input
-                matInput
-                type="number"
-                step="any"
-                min="0"
-                [ngModel]="inv.advanceAmount"
-                (ngModelChange)="setNumeric('advanceAmount', $event)"
-                [readonly]="!editable()"
-              />
-              <span matSuffix class="suffix">{{ inv.currency | currencySymbol }}</span>
-            </mat-form-field>
+            @if (!isAdvance()) {
+              @if (inv.advanceInvoiceId) {
+                <div class="advance-link">
+                  <mat-icon>savings</mat-icon>
+                  <span class="advance-link__text">
+                    Одбиен аванс <strong>{{ inv.advanceAmount | money: inv.currency }}</strong>
+                    <span class="advance-link__sub">
+                      Авансна фактура {{ inv.advanceInvoiceNumber }}
+                      @if (inv.advanceDate) {
+                        од {{ inv.advanceDate | mkDate }}
+                      }
+                    </span>
+                  </span>
+                  @if (editable()) {
+                    <button
+                      mat-icon-button
+                      type="button"
+                      (click)="removeAdvance()"
+                      aria-label="Отстрани го авансот"
+                      matTooltip="Отстрани го авансот"
+                    >
+                      <mat-icon>close</mat-icon>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <mat-form-field>
+                  <mat-label>Аванс</mat-label>
+                  <input
+                    matInput
+                    type="number"
+                    step="any"
+                    min="0"
+                    [ngModel]="inv.advanceAmount"
+                    (ngModelChange)="setNumeric('advanceAmount', $event)"
+                    [readonly]="!editable()"
+                  />
+                  <span matSuffix class="suffix">{{ inv.currency | currencySymbol }}</span>
+                </mat-form-field>
+              }
+            }
           </div>
         </section>
 
@@ -616,12 +691,23 @@
               }
               @if (t.advanceAmount > 0) {
                 <div class="totals--muted">
-                  <dt>Аванс</dt>
+                  <dt>
+                    Аванс
+                    @if (inv.advanceInvoiceNumber) {
+                      ({{ inv.advanceInvoiceNumber }})
+                    }
+                  </dt>
                   <dd>− {{ t.advanceAmount | amount }}</dd>
                 </div>
+                @if (inv.advanceVatAmount) {
+                  <div class="totals--muted totals--sub">
+                    <dt>од тоа ДДВ</dt>
+                    <dd>{{ inv.advanceVatAmount | amount }}</dd>
+                  </div>
+                }
               }
               <div class="totals__grand">
-                <dt>За плаќање</dt>
+                <dt>{{ isAdvance() ? 'Примен аванс' : 'За плаќање' }}</dt>
                 <dd>{{ t.finalAmount | money: inv.currency }}</dd>
               </div>
             </dl>

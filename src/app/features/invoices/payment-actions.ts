@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { InvoiceService } from '../../core/data/invoice.service';
-import { paymentStatusFor, type Invoice } from '../../core/models/invoice.model';
+import { docLabel, paymentStatusFor, type Invoice } from '../../core/models/invoice.model';
 import { formatDate, toIsoDate, todayIso, type IsoDate } from '../../core/util/dates';
 import { formatMoney, round2 } from '../../core/util/money';
 
@@ -56,7 +56,7 @@ export function paidAtFor(date: Date): number {
 }
 
 function describe(invoice: Invoice, paidAmount: number, paidAt: number | null): string {
-  const name = invoice.number ? `Фактура ${invoice.number}` : 'Фактурата';
+  const name = invoice.number ? `${docLabel(invoice)} ${invoice.number}` : 'Фактурата';
   const total = invoice.totals.finalAmount;
   switch (paymentStatusFor(round2(paidAmount), total)) {
     case 'paid':

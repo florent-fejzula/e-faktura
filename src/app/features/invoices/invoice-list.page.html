@@ -239,6 +239,9 @@
             >
               <td class="num-cell">
                 <span class="number">{{ invoice.number || 'Нацрт' }}</span>
+                @if (isAdvanceInvoice(invoice)) {
+                  <span class="doc-kind">Авансна</span>
+                }
               </td>
               <td>{{ invoice.issueDate | mkDate }}</td>
               <td class="client-cell">
@@ -301,7 +304,12 @@
         <li class="card">
           <a class="card__main" [routerLink]="['/fakturi', invoice.id]">
             <div class="card__top">
-              <span class="number">{{ invoice.number || 'Нацрт' }}</span>
+              <span class="number">
+                {{ invoice.number || 'Нацрт' }}
+                @if (isAdvanceInvoice(invoice)) {
+                  <span class="doc-kind">Авансна</span>
+                }
+              </span>
               <strong class="tabular">{{ invoice.totals.finalAmount | money: invoice.currency }}</strong>
             </div>
             <div class="card__client">{{ invoice.client.name || '—' }}</div>

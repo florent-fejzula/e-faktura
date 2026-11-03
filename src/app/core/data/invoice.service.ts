@@ -14,18 +14,32 @@ import {
   updateDoc,
   where,
 } from '@angular/fire/firestore';
-import { Observable, map, of } from 'rxjs';
+import { Observable, combineLatest, map, of } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import type { Client, ClientSnapshot } from '../models/client.model';
 import type { Company, NumberingReset } from '../models/company.model';
 import { snapshotClient } from '../models/client.model';
 import { snapshotCompany } from '../models/company.model';
 import { emptyAddress } from '../models/common.model';
-import { paymentStatusFor, type Invoice, type InvoiceItem } from '../models/invoice.model';
+import {
+  DOC_TYPES,
+  isAdvanceInvoice,
+  paymentStatusFor,
+  type Invoice,
+  type InvoiceItem,
+} from '../models/invoice.model';
 import type { CodebookSet } from '../ujp/codebooks';
 import { computeInvoice } from '../ujp/totals';
 import { amountInWordsMk } from '../util/amount-in-words';
-import { addDays, monthOf, skopjeToday, todayIso, yearOf, type IsoDate } from '../util/dates';
+import {
+  addDays,
+  fromIsoDate,
+  monthOf,
+  skopjeToday,
+  todayIso,
+  yearOf,
+  type IsoDate,
+} from '../util/dates';
 import { newId, normalizeForSearch } from '../util/id';
 import { round2 } from '../util/money';
 import { highestSeqInPeriod, nextInvoiceNumber } from './numbering';
@@ -77,6 +91,47 @@ export class InvoiceService {
           idField: 'id',
         }) as Observable<Invoice | undefined>,
     ).pipe(map((invoice) => invoice ?? null));
+  }
+
+  /**
+   * The company's issued advance invoices, each with the invoice that deducted
+   * it, if one has. Few enough to load whole: an advance is the exception.
+   */
+  watchAdvances(companyId: string | null): Observable<AdvanceInvoice[]> {
+    if (!companyId) return of([]);
+    return this.inContext(() => {
+      const invoices = collection(this.firestore, this.path(companyId));
+      const advances = collectionData(
+        query(invoices, where('docType', '==', DOC_TYPES.advance.code)),
+        { idField: 'id' },
+      ) as Observable<Invoice[]>;
+      const deductions = collectionData(
+        query(invoices, where('advanceInvoiceId', '!=', null)),
+        { idField: 'id' },
+      ) as Observable<Invoice[]>;
+
+      return combineLatest([advances, deductions]).pipe(
+        map(([advanceList, deducting]) => {
+          const usedBy = new Map(
+            deducting.map((i) => [i.advanceInvoiceId!, { id: i.id, number: i.number }]),
+          );
+          return advanceList
+            .filter((a) => a.issuedAt !== null)
+            .map((a) => ({
+              id: a.id,
+              number: a.number,
+              issueDate: a.issueDate,
+              clientId: a.client.id ?? null,
+              clientTaxNumber: a.client.taxNumber,
+              currency: a.currency,
+              amount: a.totals.finalAmount,
+              vatAmount: a.totals.vatAmount,
+              usedBy: usedBy.get(a.id) ?? null,
+            }))
+            .sort((x, y) => x.issueDate.localeCompare(y.issueDate));
+        }),
+      );
+    });
   }
 
   /**
@@ -143,6 +198,9 @@ export class InvoiceService {
       advanceAmount: 0,
       advanceDate: null,
       advanceDescription: '',
+      advanceInvoiceId: null,
+      advanceInvoiceNumber: null,
+      advanceVatAmount: 0,
 
       notes: '',
       headerText: '',
@@ -179,6 +237,8 @@ export class InvoiceService {
     return {
       ...draft,
       issuedAt: null,
+      docType: source.docType,
+      docTypeName: source.docTypeName,
       client: source.client,
       currency: source.currency,
       exchangeRate: source.exchangeRate,
@@ -197,12 +257,24 @@ export class InvoiceService {
 
   /** Recomputes every derived field. Call before any write. */
   finalize(invoice: Invoice, codebooks: CodebookSet): Invoice {
+    // An advance invoice is for the advance itself; it never deducts one.
+    const advance = isAdvanceInvoice(invoice);
     const { totals, vatTotals } = computeInvoice(invoice.items, codebooks, {
-      advanceAmount: invoice.advanceAmount,
+      advanceAmount: advance ? 0 : invoice.advanceAmount,
     });
 
     return {
       ...invoice,
+      ...(advance
+        ? {
+            advanceAmount: 0,
+            advanceDate: null,
+            advanceDescription: '',
+            advanceInvoiceId: null,
+            advanceInvoiceNumber: null,
+            advanceVatAmount: 0,
+          }
+        : {}),
       totals,
       vatTotals,
       year: yearOf(invoice.issueDate),
@@ -298,6 +370,17 @@ export class InvoiceService {
           },
           codebooks,
         );
+
+        // An advance invoice is issued for money already received, so it goes
+        // out paid — on its issue date — rather than as a debt to chase.
+        if (isAdvanceInvoice(numbered)) {
+          numbered.paymentStatus = 'paid';
+          numbered.paidAmount = numbered.totals.finalAmount;
+          numbered.paidAt =
+            numbered.issueDate === skopjeToday()
+              ? Date.now()
+              : (fromIsoDate(numbered.issueDate)?.setHours(12) ?? Date.now());
+        }
 
         const { id, ...data } = numbered;
         const stats = company.stats ?? { issuedCount: 0, lastIssuedAt: null };
@@ -435,4 +518,19 @@ export function emptyClientSnapshot(): ClientSnapshot {
 export function defaultDateWindow(): { from: IsoDate; to: IsoDate } {
   const year = yearOf(todayIso());
   return { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+/** An issued advance invoice, as a final invoice is offered it to deduct. */
+export interface AdvanceInvoice {
+  id: string;
+  number: string;
+  issueDate: IsoDate;
+  clientId: string | null;
+  clientTaxNumber: string;
+  currency: string;
+  /** With ДДВ: what the client paid. */
+  amount: number;
+  vatAmount: number;
+  /** The invoice that already deducted it, if any. */
+  usedBy: { id: string; number: string } | null;
 }

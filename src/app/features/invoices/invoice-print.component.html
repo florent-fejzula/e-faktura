@@ -33,7 +33,7 @@
       </div>
 
       <div class="doc">
-        <h1 class="doc__title" [class.doc__title--long]="layout().title !== 'faktura'">
+        <h1 class="doc__title" [class.doc__title--long]="isAdvance() || layout().title !== 'faktura'">
           {{ title() }}
         </h1>
         <div class="doc__number">{{ inv.number || 'нацрт' }}</div>
@@ -47,10 +47,12 @@
               <th>Датум на промет</th>
               <td>{{ inv.turnoverDate | mkDate }}</td>
             </tr>
-            <tr>
-              <th>Рок на плаќање</th>
-              <td>{{ inv.dueDate | mkDate }}</td>
-            </tr>
+            @if (!isAdvance()) {
+              <tr>
+                <th>Рок на плаќање</th>
+                <td>{{ inv.dueDate | mkDate }}</td>
+              </tr>
+            }
           </tbody>
         </table>
       </div>
@@ -136,7 +138,8 @@
     <!-- totals --------------------------------------------------------- -->
     <section class="foot">
       <div class="foot__left">
-        @if (inv.seller.bankAccount; as bank) {
+        <!-- An advance invoice is for money already received: nothing to pay in. -->
+        @if (!isAdvance() && inv.seller.bankAccount; as bank) {
           <div class="block">
             <div class="block__label">Плаќање</div>
             <div>{{ bank.bankName }}</div>
@@ -208,12 +211,23 @@
             }
             @if (totals().advanceAmount > 0) {
               <tr>
-                <th>Аванс</th>
+                <th>
+                  Аванс
+                  @if (inv.advanceInvoiceNumber) {
+                    по авансна фактура {{ inv.advanceInvoiceNumber }}
+                  }
+                </th>
                 <td>− {{ totals().advanceAmount | amount }}</td>
               </tr>
+              @if (inv.advanceVatAmount) {
+                <tr class="totals__sub">
+                  <th>од тоа ДДВ</th>
+                  <td>{{ inv.advanceVatAmount | amount }}</td>
+                </tr>
+              }
             }
             <tr class="totals__grand">
-              <th>За плаќање</th>
+              <th>{{ isAdvance() ? 'Примен аванс' : 'За плаќање' }}</th>
               <td>{{ totals().finalAmount | money: inv.currency }}</td>
             </tr>
           </tbody>

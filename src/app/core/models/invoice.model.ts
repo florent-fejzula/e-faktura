@@ -143,7 +143,11 @@ export interface Invoice extends AuditFields {
   id: string;
   companyId: string;
 
-  /** Always `100` (Фактура) today; other types are a later phase. */
+  /**
+   * УЈП document type: `100` Фактура, or `130` Авансна фактура — the invoice
+   * the law requires for money received before the goods or services are
+   * delivered. See `DOC_TYPES`.
+   */
   docType: string;
   docTypeName: string;
   docStorno: UjpDocStorno;
@@ -202,6 +206,15 @@ export interface Invoice extends AuditFields {
   advanceAmount: number;
   advanceDate: string | null;
   advanceDescription: string;
+  /**
+   * The advance invoice this one deducts, when it was picked rather than typed
+   * in — so it is offered to no other invoice. Absent on invoices from before
+   * advance invoices existed.
+   */
+  advanceInvoiceId?: string | null;
+  advanceInvoiceNumber?: string | null;
+  /** The ДДВ inside that advance, already declared once on the advance invoice. */
+  advanceVatAmount?: number;
 
   notes: string;
   headerText: string;
@@ -226,6 +239,22 @@ export interface Invoice extends AuditFields {
 }
 
 /** A document is editable only while it is still an unissued draft. */
+/** The document types this app issues, as УЈП codes them. */
+export const DOC_TYPES = {
+  invoice: { code: '100', name: 'Фактура' },
+  advance: { code: '130', name: 'Авансна фактура' },
+} as const;
+
+/** An invoice for money received in advance, not for a delivery. */
+export function isAdvanceInvoice(invoice: Pick<Invoice, 'docType'>): boolean {
+  return invoice.docType === DOC_TYPES.advance.code;
+}
+
+/** What the document is called in a sentence: "Фактура" or "Авансна фактура". */
+export function docLabel(invoice: Pick<Invoice, 'docType'>): string {
+  return isAdvanceInvoice(invoice) ? DOC_TYPES.advance.name : DOC_TYPES.invoice.name;
+}
+
 /**
  * The id segment of a new invoice's address, `/fakturi/nova`. It is replaced
  * by the invoice's own id as soon as the invoice is first edited.

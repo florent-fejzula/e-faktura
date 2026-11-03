@@ -113,6 +113,19 @@
   }
 }
 
+/* An advance invoice, under its number. */
+.doc-kind {
+  display: block;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-small);
+  letter-spacing: 0.02em;
+}
+
+.card__top .doc-kind {
+  display: inline;
+  margin-inline-start: 6px;
+}
+
 /* --- payment badge and popover ---------------------------------------------- */
 
 .pay-trigger {

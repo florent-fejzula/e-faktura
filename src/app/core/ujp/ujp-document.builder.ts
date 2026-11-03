@@ -1,7 +1,7 @@
 import type { ClientSnapshot } from '../models/client.model';
 import type { CompanySnapshot } from '../models/company.model';
 import type { Address } from '../models/common.model';
-import type { ComputedLine, Invoice, VatTotalLine } from '../models/invoice.model';
+import { isAdvanceInvoice, type ComputedLine, type Invoice, type VatTotalLine } from '../models/invoice.model';
 import type {
   UjpAddress,
   UjpBuyer,
@@ -167,13 +167,19 @@ function buildVatTotal(row: VatTotalLine): UjpVatTotal {
 }
 
 function buildTotals(invoice: Invoice, totals: Invoice['totals']): UjpTotals {
-  return {
+  const amounts = {
     docNetAmount: totals.netAmount,
     docDiscountAmount: totals.discountAmount,
     docNetAmountDisc: totals.netAmountDisc,
     docVatAmount: totals.vatAmount,
     docGrossAmount: totals.grossAmount,
     docGrossAmountR: totals.grossAmountRounded,
+  };
+  // УЈП's 130 Авансна фактура has no advance-deduction fields at all: it is
+  // the advance. Only a 100 Фактура deducts one and states what is left.
+  if (isAdvanceInvoice(invoice)) return amounts;
+  return {
+    ...amounts,
     docAvansDate: invoice.advanceAmount > 0 ? invoice.advanceDate : null,
     docAvansDesc:
       invoice.advanceAmount > 0 ? clampOrNull(invoice.advanceDescription, 200) : null,

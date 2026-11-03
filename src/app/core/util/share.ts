@@ -1,5 +1,5 @@
 import type { PdfFileNaming } from '../models/company.model';
-import type { Invoice } from '../models/invoice.model';
+import { docLabel, isAdvanceInvoice, type Invoice } from '../models/invoice.model';
 import { formatDate } from './dates';
 import { formatAmount } from './money';
 
@@ -46,7 +46,7 @@ export function composePdfFileName(name: string, number: string): string {
 /** Subject line for the e-mail channel. */
 export function shareSubject(invoice: Invoice): string {
   const number = invoice.number || 'нацрт';
-  return `Фактура ${number} — ${invoice.seller.name}`;
+  return `${docLabel(invoice)} ${number} — ${invoice.seller.name}`;
 }
 
 /**
@@ -59,12 +59,24 @@ export function shareBody(invoice: Invoice): string {
 
   lines.push(greeting ? `Почитувани ${greeting},` : 'Почитувани,');
   lines.push('');
+  const kind = docLabel(invoice).toLowerCase();
   lines.push(
     invoice.number
-      ? `Во прилог е фактура бр. ${invoice.number} од ${formatDate(invoice.issueDate)}.`
-      : `Во прилог е фактура од ${formatDate(invoice.issueDate)}.`,
+      ? `Во прилог е ${kind} бр. ${invoice.number} од ${formatDate(invoice.issueDate)}.`
+      : `Во прилог е ${kind} од ${formatDate(invoice.issueDate)}.`,
   );
   lines.push('');
+
+  // An advance invoice confirms money already received: nothing to pay, and so
+  // no deadline or account to pay into.
+  if (isAdvanceInvoice(invoice)) {
+    lines.push(`Примен аванс: ${formatAmount(invoice.totals.finalAmount)} ${invoice.currency}`);
+    lines.push('');
+    lines.push('Со почит,');
+    lines.push(invoice.seller.name);
+    return lines.join('\n');
+  }
+
   lines.push(`Износ за плаќање: ${formatAmount(invoice.totals.finalAmount)} ${invoice.currency}`);
   lines.push(`Рок на плаќање: ${formatDate(invoice.dueDate)}`);
 

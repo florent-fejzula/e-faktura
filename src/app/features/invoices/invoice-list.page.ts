@@ -21,6 +21,8 @@ import { CompanyService } from '../../core/data/company.service';
 import { InvoiceService } from '../../core/data/invoice.service';
 import {
   UJP_STATUS_LABELS,
+  docLabel,
+  isAdvanceInvoice,
   isDeletable,
   isEditable,
   type Invoice,
@@ -246,7 +248,11 @@ export class InvoiceListPage {
   protected readonly summary = computed(() => {
     const rows = this.matching();
     const total = round2(rows.reduce((s, i) => s + i.totals.finalAmount, 0));
-    const vat = round2(rows.reduce((s, i) => s + i.totals.vatAmount, 0));
+    // ДДВ on an advance is declared on the advance invoice; the final invoice
+    // that deducts it states it again, so it is counted once, not twice.
+    const vat = round2(
+      rows.reduce((s, i) => s + i.totals.vatAmount - (i.advanceVatAmount ?? 0), 0),
+    );
     // Receivables are owed the moment an invoice is *issued*, which is not the
     // same as `status !== '00'`: УЈП's status stays "00" until they actually
     // have a copy, so testing it hid every issued-but-unsubmitted invoice from
@@ -323,6 +329,7 @@ export class InvoiceListPage {
   }
 
   protected readonly paidOn = paidOn;
+  protected readonly isAdvanceInvoice = isAdvanceInvoice;
 
   /**
    * Keys typed in the payment popover stay in it. The menu around it would
@@ -389,6 +396,7 @@ export class InvoiceListPage {
     const rows = this.rows();
     const header = [
       'Број',
+      'Вид',
       'Датум',
       'Датум на промет',
       'Рок',
@@ -396,6 +404,7 @@ export class InvoiceListPage {
       'ЕДБ',
       'Основица',
       'ДДВ',
+      'Одбиен аванс',
       'Вкупно',
       'Платено',
       'Статус',
@@ -407,6 +416,7 @@ export class InvoiceListPage {
       ...rows.map((i) =>
         [
           i.number,
+          docLabel(i),
           i.issueDate,
           i.turnoverDate,
           i.dueDate,
@@ -414,6 +424,7 @@ export class InvoiceListPage {
           i.client.taxNumber,
           i.totals.netAmountDisc,
           i.totals.vatAmount,
+          i.totals.advanceAmount,
           i.totals.finalAmount,
           i.paidAmount,
           UJP_STATUS_LABELS[i.status] ?? i.status,

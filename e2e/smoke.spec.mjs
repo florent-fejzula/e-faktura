@@ -1155,6 +1155,103 @@ const run = async () => {
     );
     check('an oversized logo is refused', hugeLogo.status === 403, `HTTP ${hugeLogo.status}`);
 
+    // --- 10b2. advance invoices --------------------------------------------
+    step('Advance invoices');
+    const pickBuyer = async () => {
+      const search = page.getByRole('combobox', { name: 'Пребарајте клиент по назив или ЕДБ' });
+      await search.focus();
+      await search.fill('КУПУВАЧ');
+      await page.getByRole('option', { name: /КУПУВАЧ ДОО/ }).click();
+    };
+    const issueOnScreen = async () => {
+      await page.getByRole('button', { name: 'Издај' }).click();
+      const confirmIssue = page.locator('mat-dialog-container');
+      await confirmIssue.waitFor({ state: 'visible' });
+      await page.waitForTimeout(600);
+      await confirmIssue.getByRole('button', { name: 'Издај' }).click();
+      await confirmIssue.waitFor({ state: 'detached', timeout: 20000 });
+      await page.waitForTimeout(1500);
+    };
+
+    // A 100.000 ден. job at 18%, half of it paid up front.
+    await open(page, `${BASE}/fakturi/nova`);
+    await page.waitForTimeout(1500);
+    await page.locator('mat-button-toggle', { hasText: 'Авансна фактура' }).locator('button').click();
+    await page.waitForTimeout(300);
+    check(
+      'a new document can be made an advance invoice',
+      (await page.locator('.bar__title h1').innerText()).includes('Нова авансна фактура'),
+    );
+    await pickBuyer();
+    await fillByLabel(page.locator('.item').first(), 'Опис', 'Аванс за изработка');
+    await fillByLabel(page.locator('.item').first(), 'Цена без ДДВ', '50000');
+    await page.waitForTimeout(800);
+    check(
+      'it prints as an advance invoice, whatever the usual heading',
+      (await page.locator('.doc__title').innerText()).trim() === 'АВАНСНА ФАКТУРА',
+    );
+    check(
+      'and asks for no payment',
+      (await page.locator('.totals__grand dt').first().innerText()).includes('Примен аванс') &&
+        !(await page.locator('.foot__left').innerText()).includes('Повикување на број'),
+    );
+    await issueOnScreen();
+    const advanceTitle = (await page.locator('.bar__title h1').innerText()).trim();
+    check('it is issued with a number', /^Авансна фактура \S+$/.test(advanceTitle), advanceTitle);
+    const advanceNumber = advanceTitle.replace('Авансна фактура ', '');
+    check(
+      'and goes out paid, the money being already in',
+      (await page.locator('.card--payment').innerText()).includes('Платено 59.000,00'),
+    );
+
+    // The invoice for the whole job offers the advance by itself.
+    await open(page, `${BASE}/fakturi/nova`);
+    await page.waitForTimeout(1500);
+    await pickBuyer();
+    await fillByLabel(page.locator('.item').first(), 'Опис', 'Изработка');
+    await fillByLabel(page.locator('.item').first(), 'Цена без ДДВ', '100000');
+    await page.waitForTimeout(800);
+    const offer = page.locator('.advance-offer');
+    check(
+      'the next invoice for that client offers the advance',
+      (await offer.count()) === 1 && (await offer.innerText()).includes(advanceNumber),
+    );
+    await offer.getByRole('button', { name: 'Одбиј ја од оваа фактура' }).click();
+    await page.waitForTimeout(600);
+    check(
+      'one click deducts it, leaving 59.000,00 to pay',
+      (await page.locator('.totals__grand dd').first().innerText()).startsWith('59.000,00') &&
+        (await offer.count()) === 0,
+    );
+    check(
+      'with the ДДВ it contained shown under it',
+      (await page.locator('.card--totals .totals--sub dd').innerText()).trim() === '9.000,00',
+    );
+    check(
+      'and the printout names the advance invoice',
+      (await page.locator('table.totals').innerText()).includes(`по авансна фактура ${advanceNumber}`),
+    );
+    await issueOnScreen();
+
+    // Deducted once, never offered again.
+    await open(page, `${BASE}/fakturi/nova`);
+    await page.waitForTimeout(1500);
+    await pickBuyer();
+    await page.waitForTimeout(800);
+    check('a deducted advance is not offered again', (await page.locator('.advance-offer').count()) === 0);
+    await page.locator('button[aria-label="Повеќе"]').first().click();
+    await page.getByRole('menuitem', { name: 'Избриши нацрт' }).click();
+    const leftover = page.locator('mat-dialog-container');
+    await leftover.waitFor({ state: 'visible' });
+    await page.waitForTimeout(400);
+    await leftover.getByRole('button', { name: 'Избриши' }).click();
+    await page.waitForURL('**/fakturi', { timeout: 15000 });
+    await page.waitForTimeout(1000);
+    check(
+      'the list marks the advance invoice',
+      (await page.locator('.table tbody tr', { hasText: advanceNumber }).locator('.doc-kind').count()) === 1,
+    );
+
     // --- 10c. optional modules --------------------------------------------
     step('Modules');
     const userToken = await idTokenFor(email, 'lozinka123');
