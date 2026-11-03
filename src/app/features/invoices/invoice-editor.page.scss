@@ -358,6 +358,30 @@
   font-size: 12px;
 }
 
+/* The Данок list's last row: switches the list rather than picking a code. */
+.opt-more {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+/* Covers the whole row, so no click reaches the option itself. */
+.opt-more__hit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-large);
+
+  mat-icon {
+    margin: 0;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
 /* --- items ---------------------------------------------------------------- */
 
 .items {

@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -14,6 +16,7 @@ import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import type { MatOption } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -22,7 +25,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSelectModule } from '@angular/material/select';
+import { MatSelect, MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Title } from '@angular/platform-browser';
@@ -51,7 +54,7 @@ import {
   isDeletable,
   isEditable,
 } from '../../core/models/invoice.model';
-import { indicatorShortLabel, resolveIndicator } from '../../core/ujp/codebooks';
+import { indicatorShortLabel, resolveIndicator, type TaxIndicator } from '../../core/ujp/codebooks';
 import { computeInvoice } from '../../core/ujp/totals';
 import { validateInvoice } from '../../core/ujp/ujp-validator';
 import { amountInWordsMk } from '../../core/util/amount-in-words';
@@ -68,6 +71,9 @@ import { InvoicePrintComponent } from './invoice-print.component';
 import { paidOn } from './payment-actions';
 import { PaymentFormComponent } from './payment-form.component';
 import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
+
+/** The value of the Данок list's last row, which switches the list; never a line's code. */
+const SHOW_ALL_INDICATORS = '__all__';
 
 /**
  * Invoice editor.
@@ -123,6 +129,7 @@ export class InvoiceEditorPage {
   private readonly clientService = inject(ClientService);
   private readonly catalogService = inject(CatalogService);
   private readonly dialog = inject(MatDialog);
+  private readonly injector = inject(Injector);
   private readonly snackBar = inject(MatSnackBar);
   private readonly title = inject(Title);
   protected readonly companies = inject(CompanyService);
@@ -347,12 +354,53 @@ export class InvoiceEditorPage {
     return !!invoice && !!this.routeId() && isDeletable(invoice);
   });
 
-  protected readonly indicators = computed(() =>
-    this.showAllIndicators()
-      ? this.codebooks().taxIndicators
-      : this.codebooks().taxIndicators.filter((i) => i.common),
-  );
+  /**
+   * Whether the Данок lists offer every УЈП code or only the common ones. The
+   * switch is the last row of the list itself, where its effect is seen.
+   */
   protected readonly showAllIndicators = signal(false);
+  protected readonly indicatorCount = computed(() => this.codebooks().taxIndicators.length);
+  protected readonly SHOW_ALL_INDICATORS = SHOW_ALL_INDICATORS;
+
+  /**
+   * The codes a line's Данок list offers: the common ones, plus the line's own
+   * if it is one of the rare ones — otherwise the field would show a blank.
+   */
+  protected indicatorsFor(code: string): readonly TaxIndicator[] {
+    const all = this.codebooks().taxIndicators;
+    return this.showAllIndicators() ? all : all.filter((i) => i.common || i.code === code);
+  }
+
+  /**
+   * The switch row, clicked. The click stops at the row, so the option is not
+   * selected and the open list grows (or shrinks) in place, from its top.
+   */
+  protected toggleAllIndicators(event: Event, select: MatSelect): void {
+    event.stopPropagation();
+    this.showAllIndicators.update((all) => !all);
+    afterNextRender(() => select.panel?.nativeElement.scrollTo({ top: 0 }), {
+      injector: this.injector,
+    });
+  }
+
+  /**
+   * The list opens scrolled to the line's code, which leaves the switch row a
+   * few rows out of sight. Show the end of the list instead whenever the code
+   * is still in view there — for the usual ДДВ 18% and "Не е ДДВ обврзник" it
+   * is. Waits a render, for the select's own scroll to the code to happen first.
+   */
+  protected revealIndicatorSwitch(select: MatSelect): void {
+    afterNextRender(
+      () => {
+        const panel: HTMLElement | undefined = select.panel?.nativeElement;
+        const current = (select.selected as MatOption | undefined)?._getHostElement();
+        if (!panel || !current) return;
+        const end = panel.scrollHeight - panel.clientHeight;
+        if (current.offsetTop >= end) panel.scrollTop = end;
+      },
+      { injector: this.injector },
+    );
+  }
 
   /** Short label for the closed tax-indicator field, e.g. `ДДВ 18%`. */
   protected indicatorLabel(code: string): string {
@@ -583,7 +631,16 @@ export class InvoiceEditorPage {
    * Changing the tax indicator moves the line to that indicator's rate and
    * group, so the two can never disagree with each other.
    */
-  protected setIndicator(index: number, code: string): void {
+  protected setIndicator(index: number, code: string, select: MatSelect): void {
+    if (code === SHOW_ALL_INDICATORS) {
+      // The switch row, chosen from the keyboard, which does select it: put
+      // the line's own code back and reopen the list once it has closed.
+      select.value = this.invoice()!.items[index].taxIndicator;
+      this.showAllIndicators.update((all) => !all);
+      setTimeout(() => select.open());
+      return;
+    }
+
     const resolved = resolveIndicator(this.codebooks(), code);
     if (!resolved) return;
 

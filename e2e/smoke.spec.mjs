@@ -300,6 +300,59 @@ const run = async () => {
       `got "${words}"`,
     );
 
+    // The Данок list: the common codes, and a last row that opens up all of
+    // them in place — clicked, or chosen with the keyboard.
+    const taxField = page.locator('.item').first().locator('.f-tax mat-select');
+    const taxOptions = page.locator('.mat-mdc-select-panel mat-option');
+    const moreRow = page.locator('.mat-mdc-select-panel .opt-more');
+    check(
+      'the Ставки header no longer carries a tax-code switch',
+      (await page.getByText('Сите даночни шифри').count()) === 0,
+    );
+    await taxField.click();
+    await moreRow.waitFor();
+    const fewCodes = await taxOptions.count();
+    check(
+      'the Данок list offers the common codes and a row for the rest',
+      fewCodes > 10 && fewCodes < 30 && /Прикажи ги сите \d+ шифри/.test(await moreRow.innerText()),
+      `got ${fewCodes} rows, last "${await moreRow.innerText()}"`,
+    );
+    await moreRow.click();
+    await page.waitForTimeout(300);
+    const allCodes = await taxOptions.count();
+    check(
+      'clicking that row grows the open list in place',
+      (await moreRow.isVisible()) && allCodes > fewCodes + 40,
+      `got ${allCodes} rows, panel open: ${await moreRow.isVisible()}`,
+    );
+    check('…and offers the way back', (await moreRow.innerText()).includes('Само чести шифри'));
+    await page.keyboard.press('Escape');
+    await page.locator('.mat-mdc-select-panel').waitFor({ state: 'detached' });
+    check(
+      'the line keeps its code',
+      (await taxField.innerText()).includes('18%'),
+      `got "${await taxField.innerText()}"`,
+    );
+    await taxField.click();
+    await moreRow.waitFor();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(600);
+    check(
+      'choosing the row with the keyboard switches the list and reopens it',
+      (await moreRow.isVisible().catch(() => false)) &&
+        (await taxOptions.count()) === fewCodes &&
+        (await moreRow.innerText()).includes('Прикажи ги сите'),
+      `got ${await taxOptions.count()} rows`,
+    );
+    await page.keyboard.press('Escape');
+    await page.locator('.mat-mdc-select-panel').waitFor({ state: 'detached' });
+    check(
+      '…and still leaves the line on its own code',
+      (await taxField.innerText()).includes('18%') && !(await taxField.innerText()).includes('шифри'),
+      `got "${await taxField.innerText()}"`,
+    );
+
     // --- 4. UJP document preview ------------------------------------------
     step('UJP document');
     await page.getByRole('button', { name: 'Провери УЈП документ' }).click();

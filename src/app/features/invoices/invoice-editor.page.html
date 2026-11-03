@@ -258,11 +258,6 @@
         <section class="card">
           <div class="card__head">
             <h2>Ставки</h2>
-            @if (editable()) {
-              <button type="button" class="link" (click)="showAllIndicators.set(!showAllIndicators())">
-                {{ showAllIndicators() ? 'Само чести шифри' : 'Сите даночни шифри' }}
-              </button>
-            }
           </div>
 
           <div class="items">
@@ -395,21 +390,38 @@
 
                   <mat-form-field class="f-tax no-subscript" subscriptSizing="fixed">
                     <mat-label>Данок</mat-label>
+                    <!-- [value] rather than ngModel: the switch row below must be
+                         able to put the line's own code back. -->
                     <mat-select
-                      [ngModel]="line.item.taxIndicator"
-                      (ngModelChange)="setIndicator(i, $event)"
+                      #taxSelect
+                      [value]="line.item.taxIndicator"
+                      (selectionChange)="setIndicator(i, $event.value, taxSelect)"
+                      (opened)="revealIndicatorSwitch(taxSelect)"
                       [disabled]="!editable()"
                       [panelWidth]="null"
                     >
                       <!-- The field is narrow, so the closed state shows a short
                            label; the full category name lives in the panel. -->
                       <mat-select-trigger>{{ indicatorLabel(line.item.taxIndicator) }}</mat-select-trigger>
-                      @for (indicator of indicators(); track indicator.code) {
+                      @for (indicator of indicatorsFor(line.item.taxIndicator); track indicator.code) {
                         <mat-option [value]="indicator.code">
                           <span class="opt-code">{{ indicator.code }}</span>
                           <span class="opt-desc">{{ indicator.categoryName }}</span>
                         </mat-option>
                       }
+                      <!-- The switch. A click lands on the inner span, which covers
+                           the row and stops it before the option would be chosen;
+                           Enter does choose it, and setIndicator() handles that. -->
+                      <mat-option class="opt-more" [value]="SHOW_ALL_INDICATORS">
+                        <span class="opt-more__hit" (click)="toggleAllIndicators($event, taxSelect)">
+                          <mat-icon>{{ showAllIndicators() ? 'unfold_less' : 'unfold_more' }}</mat-icon>
+                          {{
+                            showAllIndicators()
+                              ? 'Само чести шифри'
+                              : 'Прикажи ги сите ' + indicatorCount() + ' шифри…'
+                          }}
+                        </span>
+                      </mat-option>
                     </mat-select>
                   </mat-form-field>
                 </div>
