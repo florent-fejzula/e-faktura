@@ -106,38 +106,20 @@
       </div>
     }
 
-    <!-- validation summary ---------------------------------------------- -->
-    @if (editable() && validation(); as check) {
-      @if (check.errors.length || check.warnings.length) {
-        <section
-          class="issues no-print"
-          [class.issues--error]="check.errors.length > 0"
-        >
-          <mat-icon>{{ check.errors.length ? 'error' : 'warning' }}</mat-icon>
-          <div>
-            <strong>
-              @if (check.errors.length) {
-                {{ check.errors.length }}
-                {{ check.errors.length === 1 ? 'проблем спречува' : 'проблеми спречуваат' }}
-                издавање
-              } @else {
-                {{ check.warnings.length }}
-                {{ check.warnings.length === 1 ? 'предупредување' : 'предупредувања' }}
-              }
-            </strong>
-            <ul>
-              @for (issue of (check.errors.length ? check.errors : check.warnings).slice(0, 4); track issue.path + issue.message) {
-                <li>{{ issue.message }}</li>
-              }
-            </ul>
-            @if ((check.errors.length ? check.errors : check.warnings).length > 4) {
-              <button type="button" class="link" (click)="openUjpPreview()">
-                Прикажи ги сите
-              </button>
-            }
-          </div>
-        </section>
-      }
+    <!-- what blocks issuing and has no field on this screen ----------------
+         Everything else is marked at its own field; see showProblems. -->
+    @if (editable() && showProblems() && problems()?.other?.length) {
+      <section class="problems-note is-problem no-print" role="alert">
+        <mat-icon>error_outline</mat-icon>
+        <div>
+          @for (text of problems()!.other; track text) {
+            <p>{{ text }}</p>
+          }
+          @if (problems()!.seller) {
+            <a routerLink="/postavki" class="link">Отвори Поставки</a>
+          }
+        </div>
+      </section>
     }
 
     <!-- UJP receipt ------------------------------------------------------ -->
@@ -162,7 +144,7 @@
       <!-- ============================ MAIN ============================ -->
       <div class="col-main">
         <!-- client -->
-        <section class="card">
+        <section class="card" [class.is-problem]="editable() && showProblems() && problems()?.client">
           <div class="card__head">
             <h2>Купувач</h2>
             @if (editable() && inv.client.id) {
@@ -200,6 +182,17 @@
                 </button>
               }
             </div>
+            <!-- A chosen client that is missing something says so straight
+                 away, quietly — that is not the form being new. -->
+            @if (editable() && problems()?.client; as text) {
+              <p class="party__problem no-print" [class.party__problem--shown]="showProblems()">
+                <mat-icon>{{ showProblems() ? 'error_outline' : 'info' }}</mat-icon>
+                <span>
+                  {{ text }}
+                  <button type="button" class="link" (click)="openClientDialog(true)">Дополни</button>
+                </span>
+              </p>
+            }
           } @else {
             <div class="client-pick no-print">
               <mat-form-field class="client-pick__field">
@@ -210,7 +203,9 @@
                   [matAutocomplete]="clientAuto"
                   [ngModel]="clientQuery()"
                   (ngModelChange)="clientQuery.set($event)"
+                  [errorStateMatcher]="problemAt('client')"
                 />
+                <mat-error>{{ problems()?.client }}</mat-error>
                 <mat-autocomplete #clientAuto="matAutocomplete">
                   @for (client of clientMatches(); track client.id) {
                     <mat-option [value]="client.name" (onSelectionChange)="selectClient(client)">
@@ -262,7 +257,11 @@
 
           <div class="items">
             @for (line of lines(); track line.item.id; let i = $index, last = $last) {
-              <article class="item" [class.item--readonly]="!editable()">
+              <article
+                class="item"
+                [class.item--readonly]="!editable()"
+                [class.is-problem]="editable() && showProblems() && problems()?.lines?.has(i)"
+              >
                 <div class="item__row item__row--desc">
                   <mat-form-field class="f-grow no-subscript" subscriptSizing="fixed">
                     <mat-label>Опис</mat-label>
@@ -275,6 +274,7 @@
                       [matAutocompleteDisabled]="!catalogEnabled() || !editable()"
                       [ngModel]="line.item.description"
                       (ngModelChange)="patchItem(i, { description: $event })"
+                      [errorStateMatcher]="problemAt('items.' + i + '.description')"
                       [readonly]="!editable()"
                     />
                     <mat-autocomplete #catalogAuto="matAutocomplete">
@@ -317,6 +317,7 @@
                       step="any"
                       [ngModel]="line.item.qty"
                       (ngModelChange)="patchItem(i, { qty: +$event || 0 })"
+                      [errorStateMatcher]="problemAt('items.' + i + '.qty')"
                       [readonly]="!editable()"
                     />
                   </mat-form-field>
@@ -328,6 +329,7 @@
                       [matAutocomplete]="unitAuto"
                       [ngModel]="line.item.unit"
                       (ngModelChange)="patchItem(i, { unit: $event })"
+                      [errorStateMatcher]="problemAt('items.' + i + '.unit')"
                       [readonly]="!editable()"
                     />
                     <mat-autocomplete #unitAuto="matAutocomplete">
@@ -348,6 +350,7 @@
                       step="any"
                       [ngModel]="line.item.unitPrice"
                       (ngModelChange)="patchItem(i, { unitPrice: +$event || 0 })"
+                      [errorStateMatcher]="problemAt('items.' + i + '.unitPrice')"
                       [readonly]="!editable()"
                     />
                     @if (editable() && line.vatImpact === 'STANDARD') {
@@ -384,6 +387,7 @@
                       max="100"
                       [ngModel]="line.item.discountPercent"
                       (ngModelChange)="patchItem(i, { discountPercent: +$event || 0 })"
+                      [errorStateMatcher]="problemAt('items.' + i + '.discountPercent')"
                       [readonly]="!editable()"
                     />
                   </mat-form-field>
@@ -397,6 +401,7 @@
                       [value]="line.item.taxIndicator"
                       (selectionChange)="setIndicator(i, $event.value, taxSelect)"
                       (opened)="revealIndicatorSwitch(taxSelect)"
+                      [errorStateMatcher]="problemAt('items.' + i + '.taxIndicator')"
                       [disabled]="!editable()"
                       [panelWidth]="null"
                     >
@@ -425,6 +430,13 @@
                     </mat-select>
                   </mat-form-field>
                 </div>
+
+                @if (editable() && showProblems() && problems()?.lines?.get(i); as text) {
+                  <p class="item__problem" role="alert">
+                    <mat-icon>error_outline</mat-icon>
+                    {{ text }}
+                  </p>
+                }
 
                 <div class="item__calc tabular">
                   <span class="item__calc-part">
@@ -532,10 +544,12 @@
                 [matDatepicker]="issuePicker"
                 [value]="asDate(inv.issueDate)"
                 (dateChange)="setIssueDate($event.value)"
+                [errorStateMatcher]="problemAt('issueDate')"
                 [readonly]="!editable()"
               />
               <mat-datepicker-toggle matIconSuffix [for]="issuePicker" [disabled]="!editable()" />
               <mat-datepicker #issuePicker />
+              <mat-error>{{ problems()?.details?.get('issueDate') }}</mat-error>
             </mat-form-field>
 
             <mat-form-field>
@@ -545,11 +559,13 @@
                 [matDatepicker]="turnoverPicker"
                 [value]="asDate(inv.turnoverDate)"
                 (dateChange)="setTurnoverDate($event.value)"
+                [errorStateMatcher]="problemAt('turnoverDate')"
                 [readonly]="!editable()"
               />
               <mat-datepicker-toggle matIconSuffix [for]="turnoverPicker" [disabled]="!editable()" />
               <mat-datepicker #turnoverPicker />
               <mat-hint>Определува во кој ДДВ период влегува.</mat-hint>
+              <mat-error>{{ problems()?.details?.get('turnoverDate') }}</mat-error>
             </mat-form-field>
 
             <mat-form-field>
@@ -559,10 +575,12 @@
                 [matDatepicker]="duePicker"
                 [value]="asDate(inv.dueDate)"
                 (dateChange)="setDueDate($event.value)"
+                [errorStateMatcher]="problemAt('dueDate')"
                 [readonly]="!editable()"
               />
               <mat-datepicker-toggle matIconSuffix [for]="duePicker" [disabled]="!editable()" />
               <mat-datepicker #duePicker />
+              <mat-error>{{ problems()?.details?.get('dueDate') }}</mat-error>
             </mat-form-field>
 
             <mat-form-field>
@@ -570,12 +588,14 @@
               <mat-select
                 [ngModel]="inv.paymentTypeCode"
                 (ngModelChange)="setPaymentType($event)"
+                [errorStateMatcher]="problemAt('paymentTypeCode')"
                 [disabled]="!editable()"
               >
                 @for (type of paymentTypes(); track type.code) {
                   <mat-option [value]="type.code">{{ type.description }}</mat-option>
                 }
               </mat-select>
+              <mat-error>{{ problems()?.details?.get('paymentTypeCode') }}</mat-error>
             </mat-form-field>
 
             <mat-form-field>
@@ -583,6 +603,7 @@
               <mat-select
                 [ngModel]="inv.currency"
                 (ngModelChange)="setCurrency($event)"
+                [errorStateMatcher]="problemAt('currency')"
                 [disabled]="!editable()"
               >
                 @for (currency of currencies(); track currency.code) {
@@ -591,6 +612,7 @@
                   </mat-option>
                 }
               </mat-select>
+              <mat-error>{{ problems()?.details?.get('currency') }}</mat-error>
             </mat-form-field>
 
             @if (inv.currency !== 'MKD') {
@@ -603,7 +625,9 @@
                   [ngModel]="inv.exchangeRate"
                   (ngModelChange)="setNumeric('exchangeRate', $event)"
                   [readonly]="!editable()"
+                  [errorStateMatcher]="problemAt('exchangeRate')"
                 />
+                <mat-error>{{ problems()?.details?.get('exchangeRate') }}</mat-error>
               </mat-form-field>
             }
 
@@ -643,8 +667,10 @@
                     [ngModel]="inv.advanceAmount"
                     (ngModelChange)="setNumeric('advanceAmount', $event)"
                     [readonly]="!editable()"
+                    [errorStateMatcher]="problemAt('advanceAmount')"
                   />
                   <span matSuffix class="suffix">{{ inv.currency | currencySymbol }}</span>
+                  <mat-error>{{ problems()?.details?.get('advanceAmount') }}</mat-error>
                 </mat-form-field>
               }
             }

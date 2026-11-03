@@ -260,6 +260,33 @@ const run = async () => {
     step('Invoice editor');
     await page.getByRole('link', { name: 'Нова фактура' }).first().click();
     await page.waitForURL('**/fakturi/nova', { timeout: 20000 });
+    await page.locator('.item').first().waitFor();
+
+    // A new invoice is empty, not wrong: nothing is marked until "Издај".
+    const marked = page.locator('.editor .is-problem, .editor .mat-form-field-invalid');
+    check(
+      'a new invoice opens with nothing marked as an error',
+      (await marked.count()) === 0 && (await page.locator('.problems-note').count()) === 0,
+      `${await marked.count()} marked`,
+    );
+    await page.locator('.bar__actions').getByRole('button', { name: 'Издај' }).click();
+    await page.waitForTimeout(800);
+    check(
+      '"Издај" on an empty invoice asks for nothing to be confirmed',
+      (await page.locator('mat-dialog-container').count()) === 0,
+    );
+    check(
+      '…and marks the buyer where it is chosen',
+      (await page.locator('.card.is-problem mat-error').innerText().catch(() => '')).includes(
+        'Изберете купувач',
+      ),
+    );
+    check(
+      '…and the line, under its fields',
+      (await page.locator('.item.is-problem .item__problem').innerText().catch(() => '')).includes(
+        'Внесете опис',
+      ) && (await page.locator('.item .mat-form-field-invalid').count()) > 0,
+    );
 
     // create the buyer inline
     await page.getByRole('button', { name: 'Нов клиент' }).click();
@@ -286,6 +313,11 @@ const run = async () => {
     await qty.fill('2');
     await fillByLabel(page, 'Цена без ДДВ', '1000');
     await page.waitForTimeout(400);
+    check(
+      'each mark goes as soon as it is fixed',
+      (await marked.count()) === 0,
+      `${await marked.count()} still marked`,
+    );
 
     const grand = (await page.locator('.totals__grand dd').textContent())?.trim();
     check('totals compute 2 × 1000 @ 18% = 2.360,00', grand?.startsWith('2.360,00'), `got "${grand}"`);
@@ -365,7 +397,20 @@ const run = async () => {
     const validationOk = await ujpDialog.locator('.ok strong').isVisible().catch(() => false);
     const reportedIssues = await ujpDialog.locator('.issues li').allTextContents();
     check('document passes local UJP validation', validationOk, reportedIssues.join(' | '));
+    check(
+      'a seller is not shown the JSON',
+      (await ujpDialog.getByRole('tab', { name: 'JSON' }).count()) === 0 &&
+        (await ujpDialog.locator('pre.json').count()) === 0,
+    );
+    await ujpDialog.getByRole('button', { name: 'Затвори' }).click();
+    await ujpDialog.waitFor({ state: 'detached' });
 
+    // The payload itself, as the admin sees it.
+    const editorUid = uidOf(await idTokenFor(email, 'lozinka123'));
+    await setAdmin(editorUid, true);
+    await page.waitForTimeout(1500);
+    await page.getByRole('button', { name: 'Провери УЈП документ' }).click();
+    await ujpDialog.waitFor({ state: 'visible' });
     await ujpDialog.getByRole('tab', { name: 'JSON' }).click();
     const json = await ujpDialog.locator('pre.json code').textContent();
     const payload = JSON.parse(json ?? '{}');
@@ -412,6 +457,8 @@ const run = async () => {
 
     await ujpDialog.getByRole('button', { name: 'Затвори' }).click();
     await ujpDialog.waitFor({ state: 'detached' });
+    await setAdmin(editorUid, false);
+    await page.waitForTimeout(1000);
 
     // --- 5. issue ----------------------------------------------------------
     step('Issuing');

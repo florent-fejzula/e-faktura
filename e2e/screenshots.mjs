@@ -134,9 +134,12 @@ try {
   await ujp.waitFor({ state: 'visible' });
   await page.waitForTimeout(500);
   await shot(page, '07-ujp-check');
-  await ujp.getByRole('tab', { name: 'JSON' }).click();
-  await page.waitForTimeout(400);
-  await shot(page, '08-ujp-json');
+  // The JSON tab is an admin's; this account becomes one only further down.
+  if (await ujp.getByRole('tab', { name: 'JSON' }).count()) {
+    await ujp.getByRole('tab', { name: 'JSON' }).click();
+    await page.waitForTimeout(400);
+    await shot(page, '08-ujp-json');
+  }
   await ujp.getByRole('button', { name: 'Затвори' }).click();
   await ujp.waitFor({ state: 'detached' });
 

@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   Injector,
   afterNextRender,
   computed,
@@ -16,7 +17,7 @@ import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import type { MatOption } from '@angular/material/core';
+import { ErrorStateMatcher, type MatOption } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -68,6 +69,7 @@ import { ShareDialog, type ShareDialogData } from './share.dialog';
 import { FORMAT_PIPES } from '../../shared/format.pipes';
 import { StatusChipComponent } from '../../shared/status-chip.component';
 import { InvoicePrintComponent } from './invoice-print.component';
+import { describeProblems } from './invoice-problems';
 import { paidOn } from './payment-actions';
 import { PaymentFormComponent } from './payment-form.component';
 import { UjpPreviewDialog, type UjpPreviewData } from './ujp-preview.dialog';
@@ -130,6 +132,7 @@ export class InvoiceEditorPage {
   private readonly catalogService = inject(CatalogService);
   private readonly dialog = inject(MatDialog);
   private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly snackBar = inject(MatSnackBar);
   private readonly title = inject(Title);
   protected readonly companies = inject(CompanyService);
@@ -336,6 +339,37 @@ export class InvoiceEditorPage {
     return validateInvoice({ ...invoice, totals, vatTotals }, this.codebooks());
   });
 
+  /**
+   * Whether "Издај" has been tried while something was missing. Until then the
+   * editor shows no errors: a new invoice is empty, not wrong. After it, each
+   * problem is marked where it is, and goes as soon as it is fixed.
+   */
+  protected readonly showProblems = signal(false);
+
+  /** What blocks issuing, placed next to what it is about. */
+  protected readonly problems = computed(() => {
+    const invoice = this.invoice();
+    const errors = this.validation()?.errors ?? [];
+    return invoice ? describeProblems(invoice, errors) : null;
+  });
+
+  private readonly matchers = new Map<string, ErrorStateMatcher>();
+
+  /**
+   * Outlines a field in red once problems are shown and this one has any. One
+   * matcher per field, kept, so the template binds the same object each time.
+   */
+  protected problemAt(path: string): ErrorStateMatcher {
+    let matcher = this.matchers.get(path);
+    if (!matcher) {
+      matcher = {
+        isErrorState: () => this.showProblems() && !!this.problems()?.fields.has(path),
+      };
+      this.matchers.set(path, matcher);
+    }
+    return matcher;
+  }
+
   /** A paid invoice shows when it was paid; "Измени" opens the form. */
   protected readonly editingPayment = signal(false);
   protected readonly paidOn = paidOn;
@@ -503,6 +537,7 @@ export class InvoiceEditorPage {
     this.saveState.set('idle');
     this.discarded = false;
     this.ownWrites.clear();
+    this.showProblems.set(false);
     this.invoice.set(invoice);
   }
 
@@ -864,19 +899,24 @@ export class InvoiceEditorPage {
     if (!invoice || !result) return;
 
     if (!result.canSubmit) {
-      this.snackBar.open(
-        `Фактурата има ${result.errors.length} ${result.errors.length === 1 ? 'грешка' : 'грешки'} што мора да се исправат.`,
-        'Во ред',
-      );
+      this.showProblems.set(true);
+      this.snackBar.open('Недостигаат податоци — означени се на фактурата.', undefined, {
+        duration: 4000,
+      });
+      this.scrollToProblem();
       return;
     }
 
+    // Warnings do not stop an invoice; they are worth a look just before it
+    // gets its number, and nowhere sooner.
     const data: ConfirmData = {
       title: 'Издавање фактура',
       message:
         'По издавањето, фактурата добива број и повеќе не може да се менува. ' +
         'Продолжувате?',
       confirmLabel: 'Издај',
+      notesTitle: 'Проверете пред издавање',
+      notes: [...new Set(result.warnings.map((warning) => warning.message))],
     };
     const confirmed = await this.dialog.open(ConfirmDialog, { data }).afterClosed().toPromise();
     if (!confirmed) return;
@@ -910,6 +950,17 @@ export class InvoiceEditorPage {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  /** Brings the first marked problem into view, once it has been drawn. */
+  private scrollToProblem(): void {
+    afterNextRender(
+      () =>
+        this.host.nativeElement
+          .querySelector('.is-problem, .mat-form-field-invalid')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      { injector: this.injector },
+    );
   }
 
   /**

@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -5,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { AdminService } from '../../core/data/admin.service';
 import type { Invoice } from '../../core/models/invoice.model';
 import type { CodebookSet } from '../../core/ujp/codebooks';
 import { buildUjpPayload } from '../../core/ujp/ujp-document.builder';
@@ -20,6 +22,9 @@ export interface UjpPreviewData {
  * Shows the exact document that would be signed and sent to УЈП, next to the
  * pre-flight validation results.
  *
+ * A seller sees the checks in plain words. The field paths and the JSON are
+ * for whoever runs the service, so they show only to an admin.
+ *
  * This is the main way to be confident about a submission before a signing
  * certificate exists: the payload here is produced by the same builder the
  * real submission uses, so what is inspected is what would be sent.
@@ -27,6 +32,7 @@ export interface UjpPreviewData {
 @Component({
   selector: 'app-ujp-preview-dialog',
   imports: [
+    NgTemplateOutlet,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -44,6 +50,8 @@ export class UjpPreviewDialog {
   protected readonly signer = inject(UjpSigner);
 
   protected readonly signerStatus = this.signer.status();
+  private readonly admin = inject(AdminService);
+  protected readonly technical = computed(() => this.admin.isAdmin() === true);
 
   protected readonly payload = computed(() =>
     buildUjpPayload(this.data.invoice, this.data.codebooks),

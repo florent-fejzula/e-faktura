@@ -178,7 +178,6 @@
 
 /* --- banners -------------------------------------------------------------- */
 
-.issues,
 .receipt {
   display: flex;
   align-items: flex-start;
@@ -202,21 +201,38 @@
   }
 }
 
-.issues--error {
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
-
-  > mat-icon {
-    color: var(--mat-sys-error);
-  }
-}
-
 .receipt {
   align-items: center;
   background: color-mix(in srgb, #1b8a4b 12%, transparent);
 
   > mat-icon {
     color: #0f6b38;
+  }
+}
+
+/*
+ * What blocks issuing and has no field on this screen — the company's own
+ * data, the totals. Shown only after "Издај" is tried, and rarely needed.
+ */
+.problems-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-inline-start: 3px solid var(--mat-sys-error);
+  border-radius: 4px 12px 12px 4px;
+  background: var(--mat-sys-surface-container-low);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+
+  > mat-icon {
+    flex: none;
+    color: var(--mat-sys-error);
+  }
+
+  p {
+    margin: 0 0 2px;
   }
 }
 
@@ -280,6 +296,12 @@
   background: var(--mat-sys-surface);
 }
 
+/* A card or a line with something to fix, once "Издај" has been tried. */
+.card.is-problem,
+.item.is-problem {
+  border-color: var(--mat-sys-error);
+}
+
 .card__head {
   display: flex;
   align-items: center;
@@ -325,6 +347,37 @@
   margin-top: 3px;
   color: var(--mat-sys-on-surface-variant);
   font: var(--mat-sys-body-small);
+}
+
+/* A chosen client missing something: quiet at first, red once "Издај" is tried. */
+.party__problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 10px 0 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--mat-sys-primary);
+  }
+
+  .link {
+    margin-inline-start: 4px;
+    font: var(--mat-sys-label-medium);
+  }
+}
+
+.party__problem--shown {
+  color: var(--mat-sys-error);
+
+  mat-icon {
+    color: var(--mat-sys-error);
+  }
 }
 
 .party__clear {
@@ -395,6 +448,23 @@
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 14px;
   background: var(--mat-sys-surface-container-low);
+}
+
+/* The line's own fields have no room for an error below each, so it goes here. */
+.item__problem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 2px 0;
+  color: var(--mat-sys-error);
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+  }
 }
 
 .item__row {

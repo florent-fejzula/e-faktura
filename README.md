@@ -285,11 +285,15 @@ JSON examples as PDFs.
   16 УЈП documents individually marked as the short list for the picker.
 - Pre-flight validation mirroring УЈП's server-side checks — mandatory fields,
   ЕДБ format, codebook membership, amount reconciliation — so a document is
-  checked before anyone plugs in a smart card.
+  checked before anyone plugs in a smart card. The editor shows none of it on a
+  new invoice: pressing **Издај** with something missing marks each problem at
+  its own field and scrolls to the first (`invoice-problems.ts` decides where
+  each one goes). Warnings, which do not block, are listed in the confirmation.
 - The status model (`00` Нацрт, `01` Испратена, `03` Прифатена, `04`, `05`, `07`
   Сторнирана, `09`, `10`) plus `EUID` / QR fields on the invoice.
-- A **Провери УЈП документ** dialog showing the exact JSON that would be signed,
-  next to the validation result, with copy and download.
+- A **Провери УЈП документ** dialog with the validation result in plain words;
+  an admin also sees the field paths and the exact JSON that would be signed,
+  with copy and download.
 - Two document types: **100 Фактура** and **130 Авансна фактура** (added by УЈП on
   28.07.2026). The law (ЗДДВ чл. 53) wants an invoice for every advance received,
   within 5 working days. A draft is switched between the two at the top of the
