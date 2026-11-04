@@ -8,7 +8,15 @@ import {
   renderInvoiceNumber,
 } from '../data/numbering';
 import { amountInWordsMk, numberToWordsMk } from './amount-in-words';
-import { addDays, daysBetween, formatDate, fromIsoDate, skopjeTimestamp, toIsoDate } from './dates';
+import {
+  addDays,
+  daysBetween,
+  formatDate,
+  fromIsoDate,
+  pickerDates,
+  skopjeTimestamp,
+  toIsoDate,
+} from './dates';
 import { formatAmount, formatMoney, toNumber } from './money';
 
 describe('Macedonian number formatting', () => {
@@ -101,6 +109,18 @@ describe('dates', () => {
     expect(addDays('2026-08-29', 15)).toBe('2026-09-13');
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
     expect(daysBetween('2026-08-01', '2026-08-16')).toBe(15);
+  });
+
+  it('hands a date picker the same object until the day changes', () => {
+    // A new object on every check made the picker rewrite a date being typed.
+    const asDate = pickerDates();
+    const first = asDate('2026-09-05');
+    expect(asDate('2026-09-05')).toBe(first);
+    expect(asDate('2026-11-04')).not.toBe(first);
+    expect(toIsoDate(asDate('2026-11-04')!)).toBe('2026-11-04');
+    expect(asDate('2026-09-05')).toBe(first);
+    expect(asDate('')).toBeNull();
+    expect(asDate(null)).toBeNull();
   });
 
   it('produces a UJP-shaped request timestamp', () => {

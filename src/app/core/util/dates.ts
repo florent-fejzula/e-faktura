@@ -31,6 +31,20 @@ export function fromIsoDate(value: IsoDate | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * `fromIsoDate` for a date picker's `[value]`: the same `Date` object for as
+ * long as the day is the same. A picker handed a new object rewrites its field,
+ * so a template that built one on every check wiped out a date mid-typing.
+ */
+export function pickerDates(): (value: IsoDate | null | undefined) => Date | null {
+  const dates = new Map<IsoDate, Date | null>();
+  return (value) => {
+    if (!value) return null;
+    if (!dates.has(value)) dates.set(value, fromIsoDate(value));
+    return dates.get(value) ?? null;
+  };
+}
+
 export function addDays(value: IsoDate, days: number): IsoDate {
   const date = fromIsoDate(value);
   if (!date) return value;

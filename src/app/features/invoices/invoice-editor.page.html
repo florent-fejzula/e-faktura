@@ -543,7 +543,7 @@
                 matInput
                 [matDatepicker]="issuePicker"
                 [value]="asDate(inv.issueDate)"
-                (dateChange)="setIssueDate($event.value)"
+                (dateChange)="setIssueDate($event)"
                 [errorStateMatcher]="problemAt('issueDate')"
                 [readonly]="!editable()"
               />
@@ -558,7 +558,7 @@
                 matInput
                 [matDatepicker]="turnoverPicker"
                 [value]="asDate(inv.turnoverDate)"
-                (dateChange)="setTurnoverDate($event.value)"
+                (dateChange)="setTurnoverDate($event)"
                 [errorStateMatcher]="problemAt('turnoverDate')"
                 [readonly]="!editable()"
               />
@@ -574,7 +574,7 @@
                 matInput
                 [matDatepicker]="duePicker"
                 [value]="asDate(inv.dueDate)"
-                (dateChange)="setDueDate($event.value)"
+                (dateChange)="setDueDate($event)"
                 [errorStateMatcher]="problemAt('dueDate')"
                 [readonly]="!editable()"
               />

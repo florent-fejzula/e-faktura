@@ -11,7 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AdminService } from '../../core/data/admin.service';
 import type { IssuedCredentials } from '../../core/models/provisioning.model';
-import { addDays, formatDate, fromIsoDate, todayIso, toIsoDate } from '../../core/util/dates';
+import { addDays, formatDate, pickerDates, todayIso, toIsoDate } from '../../core/util/dates';
 import { newId } from '../../core/util/id';
 import { generatePassword, groupForReading } from '../../core/util/password';
 
@@ -139,9 +139,7 @@ export class NewCustomerDialog {
     return credentials ? welcomeMessage(credentials, location.origin) : '';
   });
 
-  protected asDate(value: string): Date | null {
-    return fromIsoDate(value);
-  }
+  protected readonly asDate = pickerDates();
 
   protected setPaidUntil(date: Date | null): void {
     if (date) this.form.controls.paidUntil.setValue(toIsoDate(date));

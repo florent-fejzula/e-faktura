@@ -319,6 +319,34 @@ const run = async () => {
       `${await marked.count()} still marked`,
     );
 
+    // A date can be typed, key by key, not only picked from the calendar.
+    const dueField = page.getByLabel('Рок на плаќање', { exact: true });
+    const originalDueText = await dueField.inputValue();
+    const year = new Date().getFullYear();
+    const typeDate = async (text) => {
+      await dueField.click();
+      await page.keyboard.press('Control+A');
+      await page.keyboard.type(text, { delay: 40 });
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(400);
+    };
+    await typeDate(`28.12.${year}`);
+    check('a typed date stays typed', (await dueField.inputValue()) === `28.12.${year}`, `got "${await dueField.inputValue()}"`);
+    await typeDate(`31.02.${year}`);
+    check(
+      'a date that does not exist gives way to the one the invoice has',
+      (await dueField.inputValue()) === `28.12.${year}`,
+      `got "${await dueField.inputValue()}"`,
+    );
+    await typeDate(`5.1.${String(year + 1).slice(2)}`);
+    check(
+      'a short date is understood',
+      (await dueField.inputValue()) === `05.01.${year + 1}`,
+      `got "${await dueField.inputValue()}"`,
+    );
+    await typeDate(originalDueText);
+    check('…and the date put back', (await dueField.inputValue()) === originalDueText);
+
     const grand = (await page.locator('.totals__grand dd').textContent())?.trim();
     check('totals compute 2 × 1000 @ 18% = 2.360,00', grand?.startsWith('2.360,00'), `got "${grand}"`);
 

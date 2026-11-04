@@ -18,7 +18,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { ErrorStateMatcher, type MatOption } from '@angular/material/core';
-import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatDatepickerModule, type MatDatepickerInputEvent } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -59,7 +59,7 @@ import { indicatorShortLabel, resolveIndicator, type TaxIndicator } from '../../
 import { computeInvoice } from '../../core/ujp/totals';
 import { validateInvoice } from '../../core/ujp/ujp-validator';
 import { amountInWordsMk } from '../../core/util/amount-in-words';
-import { addDays, fromIsoDate, toIsoDate } from '../../core/util/dates';
+import { addDays, pickerDates, toIsoDate } from '../../core/util/dates';
 import { matchesSearch, newId } from '../../core/util/id';
 import { pdfFileName } from '../../core/util/share';
 import { toNumber } from '../../core/util/money';
@@ -752,7 +752,8 @@ export class InvoiceEditorPage {
     this.patch({ number: value });
   }
 
-  protected setIssueDate(date: Date | null): void {
+  protected setIssueDate(event: MatDatepickerInputEvent<Date>): void {
+    const date = this.pickedDate(event, 'issueDate');
     if (!date) return;
     const issueDate = toIsoDate(date);
     const company = this.companies.activeCompany();
@@ -773,12 +774,28 @@ export class InvoiceEditorPage {
     });
   }
 
-  protected setTurnoverDate(date: Date | null): void {
+  protected setTurnoverDate(event: MatDatepickerInputEvent<Date>): void {
+    const date = this.pickedDate(event, 'turnoverDate');
     if (date) this.patch({ turnoverDate: toIsoDate(date) });
   }
 
-  protected setDueDate(date: Date | null): void {
+  protected setDueDate(event: MatDatepickerInputEvent<Date>): void {
+    const date = this.pickedDate(event, 'dueDate');
     if (date) this.patch({ dueDate: toIsoDate(date) });
+  }
+
+  /**
+   * The date a field settled on, typed or picked. Typing that is not a date
+   * (31.02, a half-typed year) puts the invoice's own date back in the field,
+   * so the field never shows a date the invoice does not have.
+   */
+  private pickedDate(
+    event: MatDatepickerInputEvent<Date>,
+    field: 'issueDate' | 'turnoverDate' | 'dueDate',
+  ): Date | null {
+    if (event.value) return event.value;
+    event.target.value = this.asDate(this.invoice()?.[field]);
+    return null;
   }
 
   protected setPaymentType(code: string): void {
@@ -799,9 +816,7 @@ export class InvoiceEditorPage {
     this.patch({ [key]: toNumber(value) } as Partial<Invoice>);
   }
 
-  protected asDate(value: string | null): Date | null {
-    return fromIsoDate(value);
-  }
+  protected readonly asDate = pickerDates();
 
   // --- client --------------------------------------------------------------
 
