@@ -42,6 +42,7 @@ import {
   SUBSCRIPTION_LABELS,
   daysRemaining,
   defaultPrintSettings,
+  orderedAccounts,
   printSettings,
   subscriptionState,
   type LogoPosition,
@@ -49,7 +50,7 @@ import {
   type PdfFileNaming,
   type PrintTitle,
 } from '../../core/models/company.model';
-import { formatAddress } from '../../core/models/common.model';
+import { formatAddress, type BankAccount } from '../../core/models/common.model';
 import { LogoError, prepareLogo } from '../../core/util/logo-image';
 import { composePdfFileName } from '../../core/util/share';
 import { UjpSigner, UjpTransport } from '../../core/ujp/ujp-signer';
@@ -145,9 +146,50 @@ export class SettingsPage {
     email: ['', Validators.email],
     phone: [''],
     contactPerson: [''],
-    bankName: [''],
-    accountNumber: [''],
+    // Every account prints on the invoice, in this order; the first is the
+    // primary one. Rows left without a number are dropped on saving.
+    banks: this.fb.nonNullable.array([this.bankRow()]),
   });
+
+  /** At most this many: they share the invoice's payment block. */
+  protected readonly MAX_BANKS = 3;
+
+  private bankRow(bank?: BankAccount) {
+    return this.fb.nonNullable.group({
+      id: [bank?.id ?? newId()],
+      bankName: [bank?.bankName ?? ''],
+      accountNumber: [bank?.accountNumber ?? ''],
+    });
+  }
+
+  private setBanks(accounts: readonly BankAccount[]): void {
+    const banks = this.form.controls.banks;
+    banks.clear();
+    const ordered = orderedAccounts(accounts);
+    for (const bank of ordered.length ? ordered : [undefined]) banks.push(this.bankRow(bank));
+  }
+
+  protected addBank(): void {
+    const banks = this.form.controls.banks;
+    if (banks.length < this.MAX_BANKS) banks.push(this.bankRow());
+  }
+
+  /** The last row is emptied rather than removed, so the fields stay in sight. */
+  protected removeBank(index: number): void {
+    const banks = this.form.controls.banks;
+    if (banks.length > 1) banks.removeAt(index);
+    else banks.at(0).patchValue({ bankName: '', accountNumber: '' });
+    banks.markAsDirty();
+  }
+
+  protected moveBankUp(index: number): void {
+    const banks = this.form.controls.banks;
+    if (index < 1) return;
+    const row = banks.at(index);
+    banks.removeAt(index);
+    banks.insert(index - 1, row);
+    banks.markAsDirty();
+  }
 
   protected readonly numberingForm = this.fb.nonNullable.group({
     pattern: ['{SEQ}/{YYYY}', Validators.required],
@@ -288,8 +330,6 @@ export class SettingsPage {
       const company = this.company();
       if (!company) return;
 
-      const bank = company.bankAccounts.find((b) => b.isPrimary) ?? company.bankAccounts[0];
-
       this.form.reset({
         name: company.name,
         taxNumber: company.taxNumber,
@@ -303,9 +343,8 @@ export class SettingsPage {
         email: company.email,
         phone: company.phone,
         contactPerson: company.contactPerson,
-        bankName: bank?.bankName ?? '',
-        accountNumber: bank?.accountNumber ?? '',
       });
+      this.setBanks(company.bankAccounts);
 
       this.numberingForm.reset({
         pattern: company.numbering.pattern,
@@ -358,7 +397,9 @@ export class SettingsPage {
     }
 
     const v = this.form.getRawValue();
-    const existing = company.bankAccounts.find((b) => b.isPrimary) ?? company.bankAccounts[0];
+    const accounts = v.banks
+      .map((b) => ({ id: b.id, bankName: b.bankName.trim(), accountNumber: b.accountNumber.trim() }))
+      .filter((b) => b.accountNumber);
 
     await this.persist(() =>
       this.companies.update(company.id, {
@@ -376,17 +417,7 @@ export class SettingsPage {
         email: v.email,
         phone: v.phone,
         contactPerson: v.contactPerson,
-        bankAccounts: v.accountNumber
-          ? [
-              {
-                id: existing?.id ?? newId(),
-                bankName: v.bankName,
-                accountNumber: v.accountNumber,
-                isPrimary: true,
-              },
-              ...company.bankAccounts.filter((b) => b.id !== existing?.id),
-            ]
-          : [],
+        bankAccounts: accounts.map((b, index) => ({ ...b, isPrimary: index === 0 })),
       }),
     );
   }

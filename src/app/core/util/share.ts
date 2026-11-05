@@ -1,4 +1,4 @@
-import type { PdfFileNaming } from '../models/company.model';
+import { sellerAccounts, type PdfFileNaming } from '../models/company.model';
 import { docLabel, isAdvanceInvoice, type Invoice } from '../models/invoice.model';
 import { formatDate } from './dates';
 import { formatAmount } from './money';
@@ -80,8 +80,8 @@ export function shareBody(invoice: Invoice): string {
   lines.push(`Износ за плаќање: ${formatAmount(invoice.totals.finalAmount)} ${invoice.currency}`);
   lines.push(`Рок на плаќање: ${formatDate(invoice.dueDate)}`);
 
-  const bank = invoice.seller.bankAccount;
-  if (bank?.accountNumber) {
+  for (const bank of sellerAccounts(invoice.seller)) {
+    if (!bank.accountNumber) continue;
     lines.push(
       `Сметка: ${bank.accountNumber}${bank.bankName ? ` (${bank.bankName})` : ''}`,
     );

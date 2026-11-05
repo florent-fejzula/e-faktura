@@ -163,6 +163,51 @@ mat-panel-title {
   margin: 20px 0 14px;
 }
 
+/* The company's bank accounts: one row each, the first printed first. */
+.banks {
+  margin-top: 4px;
+}
+
+.bank {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 96px;
+  gap: 12px 16px;
+  align-items: start;
+}
+
+.bank + .bank {
+  margin-top: 12px;
+}
+
+.bank__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.banks__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+
+  .field-hint {
+    margin: 0;
+  }
+}
+
+@media (max-width: 599px) {
+  .bank {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* The bank's name above its number, the buttons beside the number. */
+  .bank > mat-form-field:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
 .sub {
   margin: 0 0 10px;
   font: var(--mat-sys-title-small);

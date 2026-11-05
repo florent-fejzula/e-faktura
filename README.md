@@ -406,8 +406,14 @@ per invoice, and the rules refuse to change or delete a logo once written. The
 heading, logo and signatory are frozen into an invoice when it is issued, so
 reprinting an old invoice never changes them.
 
+A company can list up to three bank accounts (Поставки → Податоци за фирмата),
+in the order they print; the first is the primary one. Every account is frozen
+into the invoice with the rest of the seller (`bankAccounts`, next to the older
+single `bankAccount` that invoices issued before keep), and the printout and the
+share message list them all. УЈП's document has no field for them.
+
 **Сподели** composes the covering message — number, amount, deadline, bank
-account, all in Macedonian — and hands it to a channel: `mailto:` for e-mail,
+accounts, all in Macedonian — and hands it to a channel: `mailto:` for e-mail,
 `wa.me` for WhatsApp, `viber://forward` for Viber, the clipboard, or the native
 share sheet where the browser offers one. The wording is editable before it
 goes, and the composer itself is pure functions in `core/util/share.ts` with

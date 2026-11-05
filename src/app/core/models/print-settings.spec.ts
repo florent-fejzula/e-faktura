@@ -5,6 +5,7 @@ import {
   defaultCompanyDefaults,
   defaultNumbering,
   printSettings,
+  sellerAccounts,
   snapshotCompany,
   type Company,
   type PrintSettings,
@@ -132,5 +133,28 @@ describe('what an invoice keeps of its seller', () => {
     const legacy = { ...snapshotCompany(company()), logoId: undefined, print: undefined };
     expect(legacy.logoId ?? null).toBeNull();
     expect(printSettings(legacy).title).toBe('faktura');
+  });
+});
+
+describe('bank accounts on the invoice', () => {
+  const stopanska = { id: 'a', bankName: 'Стопанска банка', accountNumber: '200004007076491', isPrimary: false };
+  const komercijalna = { id: 'b', bankName: 'Комерцијална банка', accountNumber: '300000000123456', isPrimary: true };
+
+  it('travel with the invoice, the primary one first', () => {
+    const seller = snapshotCompany(company({ bankAccounts: [stopanska, komercijalna] }));
+    expect(seller.bankAccounts?.map((b) => b.id)).toEqual(['b', 'a']);
+    expect(seller.bankAccount?.id).toBe('b');
+    expect(sellerAccounts(seller).map((b) => b.id)).toEqual(['b', 'a']);
+  });
+
+  it('are the one account an older invoice carries', () => {
+    expect(sellerAccounts({ bankAccount: stopanska })).toEqual([stopanska]);
+    expect(sellerAccounts({ bankAccount: null })).toEqual([]);
+  });
+
+  it('are none for a company without any', () => {
+    const seller = snapshotCompany(company());
+    expect(seller.bankAccount).toBeNull();
+    expect(sellerAccounts(seller)).toEqual([]);
   });
 });

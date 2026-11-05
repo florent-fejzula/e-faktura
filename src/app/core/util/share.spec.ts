@@ -51,6 +51,24 @@ describe('share message', () => {
     expect(body.startsWith('Почитувани Марија,')).toBe(true);
   });
 
+  it('lists every account, in the order they print', () => {
+    const body = shareBody(invoiceFixture({
+      seller: {
+        name: 'ДОДИ ТЕК ДООЕЛ',
+        bankAccount: { bankName: 'СТОПАНСКА БАНКА АД СКОПЈЕ', accountNumber: '200004007076491' },
+        bankAccounts: [
+          { id: 'a', bankName: 'СТОПАНСКА БАНКА АД СКОПЈЕ', accountNumber: '200004007076491', isPrimary: true },
+          { id: 'b', bankName: 'КОМЕРЦИЈАЛНА БАНКА АД СКОПЈЕ', accountNumber: '300000000123456', isPrimary: false },
+        ],
+      },
+    }));
+    const accountLines = body.split('\n').filter((line) => line.startsWith('Сметка:'));
+    expect(accountLines).toEqual([
+      'Сметка: 200004007076491 (СТОПАНСКА БАНКА АД СКОПЈЕ)',
+      'Сметка: 300000000123456 (КОМЕРЦИЈАЛНА БАНКА АД СКОПЈЕ)',
+    ]);
+  });
+
   it('omits the account line when no bank is set', () => {
     const body = shareBody(invoiceFixture({
       seller: { name: 'ДОДИ ТЕК ДООЕЛ', bankAccount: null },

@@ -1202,6 +1202,39 @@ const run = async () => {
     await page.waitForTimeout(800);
 
     const asOwner = { headers: { Authorization: 'Bearer owner' } };
+
+    // Two bank accounts, the second moved to the top: both print, in that order.
+    const bankRows = page.locator('.banks .bank');
+    await bankRows.nth(0).getByLabel('Банка', { exact: true }).fill('Стопанска банка АД Скопје');
+    await bankRows.nth(0).getByLabel('Трансакциска сметка', { exact: true }).fill('200000000000001');
+    await page.getByRole('button', { name: 'Додади сметка' }).click();
+    await bankRows.nth(1).getByLabel('Банка', { exact: true }).fill('Комерцијална банка АД Скопје');
+    await bankRows.nth(1).getByLabel('Трансакциска сметка', { exact: true }).fill('300000000000002');
+    await bankRows.nth(1).getByRole('button', { name: 'Премести нагоре' }).click();
+    await page.waitForTimeout(400);
+    check(
+      'an account moves up the list',
+      (await bankRows.nth(0).getByLabel('Трансакциска сметка', { exact: true }).inputValue()) === '300000000000002',
+    );
+    await page
+      .locator('mat-expansion-panel', { has: page.locator('.banks') })
+      .getByRole('button', { name: 'Зачувај' })
+      .click();
+    await page.waitForTimeout(1500);
+    const bankCompany = await fetch(`${FIRESTORE}/companies/${companyId}`, asOwner).then((r) => r.json());
+    const savedBanks = (bankCompany.fields?.bankAccounts?.arrayValue?.values ?? []).map((v) => ({
+      number: v.mapValue.fields.accountNumber.stringValue,
+      primary: v.mapValue.fields.isPrimary.booleanValue,
+    }));
+    check(
+      'both accounts are saved, the first as the primary one',
+      JSON.stringify(savedBanks) ===
+        JSON.stringify([
+          { number: '300000000000002', primary: true },
+          { number: '200000000000001', primary: false },
+        ]),
+      JSON.stringify(savedBanks),
+    );
     const printedCompany = await fetch(`${FIRESTORE}/companies/${companyId}`, asOwner).then((r) => r.json());
     const logoId = printedCompany.fields?.logoId?.stringValue;
     check('the company points at its new logo', !!logoId);
@@ -1241,6 +1274,14 @@ const run = async () => {
         signatures.includes('Лице овластено за потпишување на фактури') &&
         !signatures.includes('Издал'),
       signatures,
+    );
+    const printedAccounts = await page.locator('app-invoice-print .account').allInnerTexts();
+    check(
+      'the printout carries both accounts, the primary one first',
+      printedAccounts.length === 2 &&
+        printedAccounts[0].includes('300000000000002') &&
+        printedAccounts[1].includes('200000000000001'),
+      JSON.stringify(printedAccounts),
     );
     const pdfName = await page.evaluate(() => {
       window.dispatchEvent(new Event('beforeprint'));

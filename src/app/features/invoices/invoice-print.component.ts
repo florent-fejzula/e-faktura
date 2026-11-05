@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { PrintSettingsService } from '../../core/data/print-settings.service';
 import { formatAddress } from '../../core/models/common.model';
-import { PRINT_TITLES, SIGNATORY_LABEL, printSettings } from '../../core/models/company.model';
+import { PRINT_TITLES, SIGNATORY_LABEL, printSettings, sellerAccounts } from '../../core/models/company.model';
 import {
   DOC_TYPES,
   isAdvanceInvoice,
@@ -59,6 +59,7 @@ export class InvoicePrintComponent {
    * for money received, not for goods delivered, so "испратница" never fits.
    */
   protected readonly isAdvance = computed(() => isAdvanceInvoice(this.invoice()));
+  protected readonly accounts = computed(() => sellerAccounts(this.invoice().seller));
   protected readonly title = computed(() =>
     (this.isAdvance() ? DOC_TYPES.advance.name : PRINT_TITLES[this.layout().title]).toUpperCase(),
   );

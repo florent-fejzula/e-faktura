@@ -139,11 +139,15 @@
     <section class="foot">
       <div class="foot__left">
         <!-- An advance invoice is for money already received: nothing to pay in. -->
-        @if (!isAdvance() && inv.seller.bankAccount; as bank) {
+        @if (!isAdvance() && accounts().length) {
           <div class="block">
             <div class="block__label">Плаќање</div>
-            <div>{{ bank.bankName }}</div>
-            <div class="mono">{{ bank.accountNumber }}</div>
+            @for (bank of accounts(); track bank.id) {
+              <div class="account">
+                <div>{{ bank.bankName }}</div>
+                <div class="mono">{{ bank.accountNumber }}</div>
+              </div>
+            }
             @if (inv.paymentTypeDesc) {
               <div>{{ inv.paymentTypeDesc }}</div>
             }

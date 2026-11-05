@@ -120,15 +120,52 @@
           <input matInput formControlName="phone" />
         </mat-form-field>
 
-        <mat-form-field>
-          <mat-label>Банка</mat-label>
-          <input matInput formControlName="bankName" />
-        </mat-form-field>
-
-        <mat-form-field>
-          <mat-label>Трансакциска сметка</mat-label>
-          <input matInput formControlName="accountNumber" />
-        </mat-form-field>
+        <section class="banks span-2" formArrayName="banks">
+          <h3 class="sub">Трансакциски сметки</h3>
+          @for (row of form.controls.banks.controls; track row.controls.id.value; let i = $index) {
+            <div class="bank" [formGroupName]="i">
+              <mat-form-field>
+                <mat-label>Банка</mat-label>
+                <input matInput formControlName="bankName" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Трансакциска сметка</mat-label>
+                <input matInput formControlName="accountNumber" inputmode="numeric" />
+              </mat-form-field>
+              <div class="bank__actions">
+                @if (i > 0) {
+                  <button
+                    mat-icon-button
+                    type="button"
+                    (click)="moveBankUp(i)"
+                    matTooltip="Премести нагоре"
+                    aria-label="Премести нагоре"
+                  >
+                    <mat-icon>arrow_upward</mat-icon>
+                  </button>
+                }
+                <button
+                  mat-icon-button
+                  type="button"
+                  (click)="removeBank(i)"
+                  matTooltip="Отстрани ја сметката"
+                  aria-label="Отстрани ја сметката"
+                >
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </div>
+          }
+          <div class="banks__foot">
+            @if (form.controls.banks.length < MAX_BANKS) {
+              <button mat-button type="button" (click)="addBank()">
+                <mat-icon>add</mat-icon>
+                Додади сметка
+              </button>
+            }
+            <p class="field-hint">Сите сметки се печатат на фактурата, по овој редослед.</p>
+          </div>
+        </section>
       </form>
 
       <div class="actions">

@@ -328,14 +328,30 @@ export interface CompanySnapshot {
   address: Address;
   email: string;
   phone: string;
+  /** The first of `bankAccounts`, kept for invoices issued before there were several. */
   bankAccount: BankAccount | null;
+  /** Every account, in the order they print. Missing on older invoices. */
+  bankAccounts?: BankAccount[];
   /** Optional: invoices issued before logos existed have neither field. */
   logoId?: string | null;
   print?: PrintLayout;
 }
 
+/** A company's accounts in print order: the primary one first, the rest as entered. */
+export function orderedAccounts(accounts: readonly BankAccount[]): BankAccount[] {
+  const primary = accounts.find((b) => b.isPrimary) ?? accounts[0];
+  return primary ? [primary, ...accounts.filter((b) => b !== primary)] : [];
+}
+
+/** The accounts an invoice prints: all of them, or the one an older invoice has. */
+export function sellerAccounts(seller: Pick<CompanySnapshot, 'bankAccount' | 'bankAccounts'>): BankAccount[] {
+  if (seller.bankAccounts?.length) return seller.bankAccounts;
+  return seller.bankAccount ? [seller.bankAccount] : [];
+}
+
 export function snapshotCompany(c: Company): CompanySnapshot {
   const { title, logoPosition, signatory } = printSettings(c);
+  const accounts = orderedAccounts(c.bankAccounts);
   return {
     id: c.id,
     name: c.name,
@@ -346,7 +362,8 @@ export function snapshotCompany(c: Company): CompanySnapshot {
     address: c.address,
     email: c.email,
     phone: c.phone,
-    bankAccount: c.bankAccounts.find((b) => b.isPrimary) ?? c.bankAccounts[0] ?? null,
+    bankAccount: accounts[0] ?? null,
+    bankAccounts: accounts,
     logoId: c.logoId ?? null,
     print: { title, logoPosition, signatory },
   };
